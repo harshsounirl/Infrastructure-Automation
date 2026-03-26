@@ -1,0 +1,37 @@
+---
+# tasks/windows_defender.yml - Configure Windows Defender
+
+- name: Enable Windows Defender real-time protection
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_defender_path }}\\Real-Time Protection"
+    name: DisableRealtimeMonitoring
+    data: "{{ 0 if win_hardening_defender_realtime else 1 }}"
+    type: dword
+
+- name: Enable behavior monitoring
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_defender_path }}\\Real-Time Protection"
+    name: DisableBehaviorMonitoring
+    data: "{{ 0 if win_hardening_defender_behavior_monitoring else 1 }}"
+    type: dword
+
+- name: Enable IOAV protection (scan downloaded files)
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_defender_path }}\\Real-Time Protection"
+    name: DisableIOAVProtection
+    data: "{{ 0 if win_hardening_defender_ioav_protection else 1 }}"
+    type: dword
+
+- name: Enable script scanning
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_defender_path }}\\Real-Time Protection"
+    name: DisableScriptScanning
+    data: "{{ 0 if win_hardening_defender_script_scanning else 1 }}"
+    type: dword
+
+- name: Ensure Windows Defender is not disabled
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_defender_path }}"
+    name: DisableAntiSpyware
+    data: 0
+    type: dword

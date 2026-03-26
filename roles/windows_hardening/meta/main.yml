@@ -1,0 +1,26 @@
+---
+galaxy_info:
+  role_name: windows_hardening
+  author: "Infrastructure Automation Team"
+  description: >
+    Ansible role to apply security hardening configurations to Windows
+    Server and Desktop systems based on CIS benchmarks and industry
+    best practices.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Windows
+      versions:
+        - "2016"
+        - "2019"
+        - "2022"
+        - "10"
+        - "11"
+  galaxy_tags:
+    - windows
+    - security
+    - hardening
+    - cis
+    - compliance
+
+dependencies: []

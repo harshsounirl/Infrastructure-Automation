@@ -1,0 +1,21 @@
+---
+# handlers/main.yml
+
+- name: Reboot Windows host
+  ansible.windows.win_reboot:
+    reboot_timeout: 600
+    msg: "Reboot triggered by windows_hardening role"
+  when: ansible_os_family == "Windows"
+
+- name: Restart Windows Firewall
+  ansible.windows.win_service:
+    name: MpsSvc
+    state: restarted
+
+- name: Restart WinRM
+  ansible.windows.win_service:
+    name: WinRM
+    state: restarted
+
+- name: Update Group Policy
+  ansible.windows.win_command: gpupdate /force

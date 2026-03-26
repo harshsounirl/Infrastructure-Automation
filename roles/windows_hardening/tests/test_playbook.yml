@@ -1,0 +1,9 @@
+---
+# tests/test_playbook.yml - Test playbook for windows_hardening role
+
+- name: Test Windows Hardening Role
+  hosts: windows
+  gather_facts: true
+
+  roles:
+    - role: windows_hardening

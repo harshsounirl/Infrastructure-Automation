@@ -1,0 +1,151 @@
+---
+# defaults/main.yml - Default variables for Windows hardening role
+
+# ─── Password Policy ────────────────────────────────────────────────
+win_hardening_password_min_length: 14
+win_hardening_password_max_age: 60
+win_hardening_password_min_age: 1
+win_hardening_password_history: 24
+win_hardening_password_complexity_enabled: true
+win_hardening_lockout_threshold: 5
+win_hardening_lockout_duration: 30
+win_hardening_lockout_reset_counter: 30
+
+# ─── Audit Policy ───────────────────────────────────────────────────
+win_hardening_audit_policies:
+  - subcategory: "Logon"
+    audit_type: "Success, Failure"
+  - subcategory: "Logoff"
+    audit_type: "Success"
+  - subcategory: "Account Lockout"
+    audit_type: "Success, Failure"
+  - subcategory: "Account Management"
+    audit_type: "Success, Failure"
+  - subcategory: "Policy Change"
+    audit_type: "Success, Failure"
+  - subcategory: "Privilege Use"
+    audit_type: "Success, Failure"
+  - subcategory: "System Integrity"
+    audit_type: "Success, Failure"
+  - subcategory: "Security Group Management"
+    audit_type: "Success, Failure"
+
+# ─── Windows Firewall ──────────────────────────────────────────────
+win_hardening_firewall_enabled: true
+win_hardening_firewall_profiles:
+  - name: Domain
+    state: enabled
+    default_inbound: block
+    default_outbound: allow
+  - name: Private
+    state: enabled
+    default_inbound: block
+    default_outbound: allow
+  - name: Public
+    state: enabled
+    default_inbound: block
+    default_outbound: allow
+
+# ─── Services to Disable ───────────────────────────────────────────
+win_hardening_disabled_services:
+  - name: RemoteRegistry
+    display: "Remote Registry"
+  - name: lltdsvc
+    display: "Link-Layer Topology Discovery Mapper"
+  - name: lltdio
+    display: "Link-Layer Topology Discovery Mapper I/O Driver"
+  - name: WMPNetworkSvc
+    display: "Windows Media Player Network Sharing"
+  - name: simptcp
+    display: "Simple TCP/IP Services"
+  - name: SSDPSRV
+    display: "SSDP Discovery"
+  - name: upnphost
+    display: "UPnP Device Host"
+  - name: XboxGipSvc
+    display: "Xbox Accessory Management Service"
+  - name: XblAuthManager
+    display: "Xbox Live Auth Manager"
+  - name: XblGameSave
+    display: "Xbox Live Game Save"
+  - name: XboxNetApiSvc
+    display: "Xbox Live Networking Service"
+  - name: Fax
+    display: "Fax"
+
+# ─── Windows Features to Remove ────────────────────────────────────
+win_hardening_features_to_remove:
+  - SMB1Protocol
+  - MicrosoftWindowsPowerShellV2
+  - MicrosoftWindowsPowerShellV2Root
+
+# ─── Registry Hardening ────────────────────────────────────────────
+# Disable autorun/autoplay
+win_hardening_disable_autorun: true
+
+# Disable anonymous SID/name translation
+win_hardening_restrict_anonymous: true
+
+# Enable SMB signing
+win_hardening_smb_signing_required: true
+
+# Disable LLMNR
+win_hardening_disable_llmnr: true
+
+# Disable NetBIOS over TCP/IP
+win_hardening_disable_netbios: true
+
+# Disable WPAD
+win_hardening_disable_wpad: true
+
+# Enable LSA protection
+win_hardening_lsa_protection: true
+
+# Enable Credential Guard (requires compatible hardware)
+win_hardening_credential_guard: false
+
+# Disable WDigest authentication
+win_hardening_disable_wdigest: true
+
+# Restrict NTLM
+win_hardening_restrict_ntlm: true
+
+# ─── Windows Update ────────────────────────────────────────────────
+win_hardening_configure_wsus: false
+win_hardening_wsus_server: ""
+win_hardening_auto_update_enabled: true
+
+# ─── Remote Desktop ────────────────────────────────────────────────
+win_hardening_rdp_nla_required: true
+win_hardening_rdp_encryption_level: "High"
+win_hardening_rdp_min_tls: "1.2"
+
+# ─── User Rights ───────────────────────────────────────────────────
+win_hardening_deny_remote_logon_guests: true
+win_hardening_deny_network_logon_guests: true
+
+# ─── TLS/SSL Hardening ─────────────────────────────────────────────
+win_hardening_disable_ssl2: true
+win_hardening_disable_ssl3: true
+win_hardening_disable_tls10: true
+win_hardening_disable_tls11: true
+win_hardening_enable_tls12: true
+win_hardening_enable_tls13: true
+
+# ─── Windows Defender ──────────────────────────────────────────────
+win_hardening_defender_realtime: true
+win_hardening_defender_behavior_monitoring: true
+win_hardening_defender_ioav_protection: true
+win_hardening_defender_script_scanning: true
+
+# ─── Event Log Sizes (KB) ──────────────────────────────────────────
+win_hardening_eventlog_application_size: 65536
+win_hardening_eventlog_security_size: 131072
+win_hardening_eventlog_system_size: 65536
+win_hardening_eventlog_powershell_size: 65536
+
+# ─── PowerShell Logging ────────────────────────────────────────────
+win_hardening_ps_script_block_logging: true
+win_hardening_ps_module_logging: true
+win_hardening_ps_transcription: false
+win_hardening_ps_transcription_path: "C:\\PSTranscripts"

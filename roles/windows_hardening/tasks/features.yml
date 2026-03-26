@@ -1,0 +1,10 @@
+---
+# tasks/features.yml - Remove insecure Windows features
+
+- name: Remove insecure Windows optional features
+  ansible.windows.win_optional_feature:
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ win_hardening_features_to_remove }}"
+  register: feature_removal
+  notify: Reboot Windows host

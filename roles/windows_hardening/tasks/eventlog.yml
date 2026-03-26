@@ -1,0 +1,34 @@
+---
+# tasks/eventlog.yml - Configure event log sizes and retention
+
+- name: Set Application event log maximum size
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_eventlog_path }}\\Application"
+    name: MaxSize
+    data: "{{ win_hardening_eventlog_application_size }}"
+    type: dword
+
+- name: Set Security event log maximum size
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_eventlog_path }}\\Security"
+    name: MaxSize
+    data: "{{ win_hardening_eventlog_security_size }}"
+    type: dword
+
+- name: Set System event log maximum size
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_eventlog_path }}\\System"
+    name: MaxSize
+    data: "{{ win_hardening_eventlog_system_size }}"
+    type: dword
+
+- name: Set event log retention to overwrite as needed
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_eventlog_path }}\\{{ item }}"
+    name: Retention
+    data: 0
+    type: dword
+  loop:
+    - Application
+    - Security
+    - System

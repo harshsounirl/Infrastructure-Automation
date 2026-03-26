@@ -1,0 +1,78 @@
+---
+# tasks/main.yml - Main entry point for Windows hardening role
+
+- name: Validate target OS
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Windows"
+    fail_msg: "This role only supports Windows hosts. Detected: {{ ansible_os_family }}"
+    success_msg: "Windows OS detected - proceeding with hardening"
+
+- name: Display role version
+  ansible.builtin.debug:
+    msg: "Windows Hardening Role v{{ win_hardening_role_version }}"
+
+- name: Include password policy tasks
+  ansible.builtin.include_tasks: password_policy.yml
+  tags:
+    - password_policy
+
+- name: Include account lockout tasks
+  ansible.builtin.include_tasks: account_lockout.yml
+  tags:
+    - account_lockout
+
+- name: Include audit policy tasks
+  ansible.builtin.include_tasks: audit_policy.yml
+  tags:
+    - audit_policy
+
+- name: Include firewall tasks
+  ansible.builtin.include_tasks: firewall.yml
+  tags:
+    - firewall
+
+- name: Include service hardening tasks
+  ansible.builtin.include_tasks: services.yml
+  tags:
+    - services
+
+- name: Include feature removal tasks
+  ansible.builtin.include_tasks: features.yml
+  tags:
+    - features
+
+- name: Include registry hardening tasks
+  ansible.builtin.include_tasks: registry_hardening.yml
+  tags:
+    - registry
+
+- name: Include TLS/SSL hardening tasks
+  ansible.builtin.include_tasks: tls_hardening.yml
+  tags:
+    - tls
+
+- name: Include Remote Desktop hardening tasks
+  ansible.builtin.include_tasks: rdp_hardening.yml
+  tags:
+    - rdp
+
+- name: Include Windows Defender tasks
+  ansible.builtin.include_tasks: windows_defender.yml
+  tags:
+    - defender
+
+- name: Include event log tasks
+  ansible.builtin.include_tasks: eventlog.yml
+  tags:
+    - eventlog
+
+- name: Include PowerShell logging tasks
+  ansible.builtin.include_tasks: powershell_logging.yml
+  tags:
+    - powershell
+
+- name: Include Windows Update tasks
+  ansible.builtin.include_tasks: windows_update.yml
+  tags:
+    - windows_update

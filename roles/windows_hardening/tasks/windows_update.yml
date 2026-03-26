@@ -1,0 +1,47 @@
+---
+# tasks/windows_update.yml - Configure Windows Update settings
+
+- name: Enable automatic updates
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU
+    name: NoAutoUpdate
+    data: "{{ 0 if win_hardening_auto_update_enabled else 1 }}"
+    type: dword
+
+- name: Set auto update to download and schedule install
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU
+    name: AUOptions
+    data: 4
+    type: dword
+  when: win_hardening_auto_update_enabled
+
+- name: Configure WSUS server
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate
+    name: WUServer
+    data: "{{ win_hardening_wsus_server }}"
+    type: string
+  when:
+    - win_hardening_configure_wsus
+    - win_hardening_wsus_server | length > 0
+
+- name: Configure WSUS status server
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate
+    name: WUStatusServer
+    data: "{{ win_hardening_wsus_server }}"
+    type: string
+  when:
+    - win_hardening_configure_wsus
+    - win_hardening_wsus_server | length > 0
+
+- name: Enable WSUS usage
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU
+    name: UseWUServer
+    data: 1
+    type: dword
+  when:
+    - win_hardening_configure_wsus
+    - win_hardening_wsus_server | length > 0

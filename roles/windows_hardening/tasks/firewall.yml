@@ -1,0 +1,21 @@
+---
+# tasks/firewall.yml - Configure Windows Firewall
+
+- name: Ensure Windows Firewall service is running
+  ansible.windows.win_service:
+    name: MpsSvc
+    start_mode: auto
+    state: started
+  when: win_hardening_firewall_enabled
+
+- name: Configure firewall profiles
+  community.windows.win_firewall:
+    profiles: "{{ item.name }}"
+    state: "{{ item.state }}"
+    inbound_action: "{{ item.default_inbound | default('block') }}"
+    outbound_action: "{{ item.default_outbound | default('allow') }}"
+  loop: "{{ win_hardening_firewall_profiles }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: win_hardening_firewall_enabled
+  notify: Restart Windows Firewall

@@ -1,0 +1,126 @@
+---
+# tasks/registry_hardening.yml - Apply registry-based security settings
+
+# ─── Autorun / Autoplay ────────────────────────────────────────────
+- name: Disable AutoRun for all drives
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_explorer_policies_path }}"
+    name: NoDriveTypeAutoRun
+    data: 255
+    type: dword
+  when: win_hardening_disable_autorun
+
+- name: Disable AutoPlay
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_explorer_policies_path }}"
+    name: NoAutorun
+    data: 1
+    type: dword
+  when: win_hardening_disable_autorun
+
+# ─── Anonymous Access Restrictions ─────────────────────────────────
+- name: Restrict anonymous SID/name translation
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lsa_path }}"
+    name: RestrictAnonymousSAM
+    data: 1
+    type: dword
+  when: win_hardening_restrict_anonymous
+
+- name: Restrict anonymous enumeration of shares
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lsa_path }}"
+    name: RestrictAnonymous
+    data: 1
+    type: dword
+  when: win_hardening_restrict_anonymous
+
+# ─── SMB Signing ───────────────────────────────────────────────────
+- name: Enable SMB client signing (required)
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lanman_path }}"
+    name: RequireSecuritySignature
+    data: 1
+    type: dword
+  when: win_hardening_smb_signing_required
+
+- name: Enable SMB server signing (required)
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lanman_server_path }}"
+    name: RequireSecuritySignature
+    data: 1
+    type: dword
+  when: win_hardening_smb_signing_required
+
+# ─── LLMNR ─────────────────────────────────────────────────────────
+- name: Disable LLMNR
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_dns_client_path }}"
+    name: EnableMulticast
+    data: 0
+    type: dword
+  when: win_hardening_disable_llmnr
+
+# ─── WPAD ──────────────────────────────────────────────────────────
+- name: Disable WPAD
+  ansible.windows.win_regedit:
+    path: HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings\Wpad
+    name: WpadOverride
+    data: 1
+    type: dword
+  when: win_hardening_disable_wpad
+
+# ─── LSA Protection ───────────────────────────────────────────────
+- name: Enable LSA protection (RunAsPPL)
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lsa_path }}"
+    name: RunAsPPL
+    data: 1
+    type: dword
+  when: win_hardening_lsa_protection
+  notify: Reboot Windows host
+
+# ─── Credential Guard ─────────────────────────────────────────────
+- name: Enable Credential Guard
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard
+    name: EnableVirtualizationBasedSecurity
+    data: 1
+    type: dword
+  when: win_hardening_credential_guard
+  notify: Reboot Windows host
+
+- name: Configure Credential Guard UEFI lock
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\Lsa
+    name: LsaCfgFlags
+    data: 1
+    type: dword
+  when: win_hardening_credential_guard
+  notify: Reboot Windows host
+
+# ─── WDigest ──────────────────────────────────────────────────────
+- name: Disable WDigest authentication
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lsa_path }}"
+    name: UseLogonCredential
+    data: 0
+    type: dword
+  when: win_hardening_disable_wdigest
+
+# ─── NTLM Restrictions ────────────────────────────────────────────
+- name: Restrict NTLM - audit incoming traffic
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lsa_path }}\\MSV1_0"
+    name: AuditReceivingNTLMTraffic
+    data: 2
+    type: dword
+  when: win_hardening_restrict_ntlm
+
+- name: Restrict sending NTLMv2 response only
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_lsa_path }}"
+    name: LmCompatibilityLevel
+    data: 5
+    type: dword
+  when: win_hardening_restrict_ntlm
