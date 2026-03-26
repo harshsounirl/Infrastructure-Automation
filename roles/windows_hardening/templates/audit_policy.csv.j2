@@ -1,0 +1,4 @@
+Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting
+{% for policy in win_hardening_audit_policies %}
+,System,{{ policy.subcategory }},,{{ policy.audit_type }},
+{% endfor %}

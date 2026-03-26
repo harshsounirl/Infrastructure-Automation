@@ -1,0 +1,12 @@
+---
+# tasks/services.yml - Disable unnecessary services
+
+- name: Disable unnecessary Windows services
+  ansible.windows.win_service:
+    name: "{{ item.name }}"
+    start_mode: disabled
+    state: stopped
+  loop: "{{ win_hardening_disabled_services }}"
+  loop_control:
+    label: "{{ item.display }}"
+  failed_when: false

@@ -1,0 +1,10 @@
+---
+# tasks/audit_policy.yml - Configure advanced audit policies
+
+- name: Configure audit policies
+  community.windows.win_audit_policy_system:
+    subcategory: "{{ item.subcategory }}"
+    audit_type: "{{ item.audit_type }}"
+  loop: "{{ win_hardening_audit_policies }}"
+  loop_control:
+    label: "{{ item.subcategory }}"

@@ -1,0 +1,98 @@
+---
+# tasks/tls_hardening.yml - Disable legacy protocols and enforce TLS 1.2+
+
+- name: Disable SSL 2.0 Server
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\SSL 2.0\\Server"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_ssl2
+
+- name: Disable SSL 2.0 Client
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\SSL 2.0\\Client"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_ssl2
+
+- name: Disable SSL 3.0 Server
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\SSL 3.0\\Server"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_ssl3
+
+- name: Disable SSL 3.0 Client
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\SSL 3.0\\Client"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_ssl3
+
+- name: Disable TLS 1.0 Server
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.0\\Server"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_tls10
+
+- name: Disable TLS 1.0 Client
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.0\\Client"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_tls10
+
+- name: Disable TLS 1.1 Server
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.1\\Server"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_tls11
+
+- name: Disable TLS 1.1 Client
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.1\\Client"
+    name: Enabled
+    data: 0
+    type: dword
+  when: win_hardening_disable_tls11
+
+- name: Enable TLS 1.2 Server
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.2\\Server"
+    name: Enabled
+    data: 1
+    type: dword
+  when: win_hardening_enable_tls12
+
+- name: Enable TLS 1.2 Client
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.2\\Client"
+    name: Enabled
+    data: 1
+    type: dword
+  when: win_hardening_enable_tls12
+
+- name: Enable TLS 1.3 Server
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.3\\Server"
+    name: Enabled
+    data: 1
+    type: dword
+  when: win_hardening_enable_tls13
+
+- name: Enable TLS 1.3 Client
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_schannel_path }}\\TLS 1.3\\Client"
+    name: Enabled
+    data: 1
+    type: dword
+  when: win_hardening_enable_tls13

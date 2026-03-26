@@ -1,0 +1,9 @@
+[windows]
+windows-test ansible_host=192.168.1.100
+
+[windows:vars]
+ansible_user=Administrator
+ansible_connection=winrm
+ansible_winrm_transport=ntlm
+ansible_port=5986
+ansible_winrm_server_cert_validation=ignore

@@ -1,0 +1,39 @@
+---
+# tasks/rdp_hardening.yml - Harden Remote Desktop settings
+
+- name: Require Network Level Authentication for RDP
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_rdp_path }}"
+    name: UserAuthentication
+    data: 1
+    type: dword
+  when: win_hardening_rdp_nla_required
+
+- name: Set RDP encryption level to High
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_rdp_path }}"
+    name: MinEncryptionLevel
+    data: 3
+    type: dword
+  when: win_hardening_rdp_encryption_level == "High"
+
+- name: Set RDP security layer to SSL/TLS
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_rdp_path }}"
+    name: SecurityLayer
+    data: 2
+    type: dword
+
+- name: Set RDP idle session timeout (15 minutes)
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+    name: MaxIdleTime
+    data: 900000
+    type: dword
+
+- name: Disable RDP drive redirection
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+    name: fDisableCdm
+    data: 1
+    type: dword

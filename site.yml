@@ -1,0 +1,15 @@
+---
+# site.yml - Example playbook for Windows hardening
+
+- name: Apply Windows Hardening
+  hosts: windows
+  gather_facts: true
+
+  vars:
+    # Override defaults as needed
+    win_hardening_password_min_length: 16
+    win_hardening_rdp_nla_required: true
+    win_hardening_credential_guard: true
+
+  roles:
+    - role: windows_hardening

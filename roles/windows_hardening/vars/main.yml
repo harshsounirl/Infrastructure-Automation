@@ -1,0 +1,27 @@
+---
+# vars/main.yml - Internal variables (not intended to be overridden)
+
+win_hardening_role_version: "1.0.0"
+
+# Registry paths used throughout the role
+win_reg_lsa_path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
+win_reg_tcpip_path: 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters'
+win_reg_netbt_path: 'HKLM:\SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces'
+win_reg_lanman_path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+win_reg_lanman_server_path: 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
+win_reg_winlogon_path: 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+win_reg_explorer_policies_path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+win_reg_schannel_path: 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols'
+win_reg_rdp_path: 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+win_reg_defender_path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender'
+win_reg_powershell_path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell'
+win_reg_eventlog_path: 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog'
+win_reg_dns_client_path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
+
+# Supported OS versions
+win_hardening_supported_os:
+  - "Microsoft Windows Server 2016"
+  - "Microsoft Windows Server 2019"
+  - "Microsoft Windows Server 2022"
+  - "Microsoft Windows 10"
+  - "Microsoft Windows 11"

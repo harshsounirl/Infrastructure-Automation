@@ -1,0 +1,46 @@
+---
+# tasks/powershell_logging.yml - Configure PowerShell logging
+
+- name: Enable PowerShell Script Block Logging
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_powershell_path }}\\ScriptBlockLogging"
+    name: EnableScriptBlockLogging
+    data: "{{ 1 if win_hardening_ps_script_block_logging else 0 }}"
+    type: dword
+
+- name: Enable PowerShell Module Logging
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_powershell_path }}\\ModuleLogging"
+    name: EnableModuleLogging
+    data: "{{ 1 if win_hardening_ps_module_logging else 0 }}"
+    type: dword
+
+- name: Log all PowerShell modules
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_powershell_path }}\\ModuleLogging\\ModuleNames"
+    name: "*"
+    data: "*"
+    type: string
+  when: win_hardening_ps_module_logging
+
+- name: Enable PowerShell Transcription
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_powershell_path }}\\Transcription"
+    name: EnableTranscripting
+    data: "{{ 1 if win_hardening_ps_transcription else 0 }}"
+    type: dword
+
+- name: Set PowerShell Transcription output directory
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_powershell_path }}\\Transcription"
+    name: OutputDirectory
+    data: "{{ win_hardening_ps_transcription_path }}"
+    type: string
+  when: win_hardening_ps_transcription
+
+- name: Set PowerShell event log size
+  ansible.windows.win_regedit:
+    path: "{{ win_reg_eventlog_path }}\\Windows PowerShell"
+    name: MaxSize
+    data: "{{ win_hardening_eventlog_powershell_size }}"
+    type: dword
