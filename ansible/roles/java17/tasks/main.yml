@@ -1,0 +1,36 @@
+---
+# ── Java 17 installation ──────────────────────────────────────────────────────
+
+- name: Install OpenJDK 17
+  ansible.builtin.dnf:
+    name:
+      - "{{ java_package }}"
+      - "{{ java_devel_package }}"
+    state: present
+
+- name: Set Java 17 as the default via alternatives
+  community.general.alternatives:
+    name: java
+    path: "{{ java_home }}/bin/java"
+    priority: 17000
+
+- name: Set JAVA_HOME system-wide
+  ansible.builtin.copy:
+    dest: /etc/profile.d/java.sh
+    mode: "0644"
+    content: |
+      # Managed by Ansible
+      export JAVA_HOME="{{ java_home }}"
+      export PATH="$JAVA_HOME/bin:$PATH"
+
+- name: Verify Java version
+  ansible.builtin.command: java -version
+  register: java_version_output
+  changed_when: false
+
+- name: Assert Java 17 is active
+  ansible.builtin.assert:
+    that:
+      - "'17' in java_version_output.stderr or '17' in java_version_output.stdout"
+    fail_msg: "Expected Java 17 but got: {{ java_version_output.stderr }}"
+    success_msg: "Java 17 confirmed: {{ java_version_output.stderr | default(java_version_output.stdout) }}"

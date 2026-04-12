@@ -1,0 +1,7 @@
+# Managed by Ansible – do not edit manually
+# Template: roles/demo_service/templates/application.properties.j2
+
+SERVER_PORT={{ demo_service_port }}
+SPRING_PROFILES_ACTIVE={{ demo_service_spring_profiles }}
+APP_ENV={{ env | default('dev') }}
+APP_HOST={{ inventory_hostname }}

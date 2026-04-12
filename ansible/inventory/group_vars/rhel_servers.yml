@@ -1,0 +1,45 @@
+---
+# ─────────────────────────────────────────────────────────────
+#  Group variables – all rhel_servers
+# ─────────────────────────────────────────────────────────────
+
+# ── Environment tag (overridden per child group) ──
+env: dev
+
+# ── Web server ────────────────────────────────────
+webserver_package: httpd
+webserver_service: httpd
+webserver_http_port: 80
+webserver_https_port: 443
+webserver_server_name: "{{ inventory_hostname }}"
+webserver_document_root: /var/www/html
+webserver_log_dir: /var/log/httpd
+webserver_welcome_message: "Red Hat Demo Server – {{ inventory_hostname }}"
+
+# ── Java 17 ───────────────────────────────────────
+java_package: java-17-openjdk
+java_home: /usr/lib/jvm/java-17-openjdk
+java_version_required: "17"
+
+# ── Demo service ──────────────────────────────────
+demo_service_name: demo-app
+demo_service_user: demoapp
+demo_service_group: demoapp
+demo_service_home: /opt/demo-app
+demo_service_jar: demo-app.jar
+demo_service_port: 8080
+demo_service_java_opts: >-
+  -Xms256m
+  -Xmx512m
+  -Djava.security.egd=file:/dev/./urandom
+demo_service_spring_profiles: "{{ env }}"
+demo_service_log_dir: /var/log/demo-app
+
+# ── Firewall ──────────────────────────────────────
+firewall_allowed_tcp_ports:
+  - "{{ webserver_http_port }}"
+  - "{{ webserver_https_port }}"
+  - "{{ demo_service_port }}"
+
+# ── SELinux ───────────────────────────────────────
+selinux_state: enforcing

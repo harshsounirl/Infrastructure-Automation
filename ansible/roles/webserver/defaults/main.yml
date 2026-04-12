@@ -1,0 +1,12 @@
+---
+webserver_package: httpd
+webserver_service: httpd
+webserver_http_port: 80
+webserver_https_port: 443
+webserver_server_name: "{{ ansible_fqdn | default(inventory_hostname) }}"
+webserver_document_root: /var/www/html
+webserver_log_dir: /var/log/httpd
+webserver_welcome_message: "Red Hat Demo Server"
+webserver_additional_packages:
+  - mod_ssl
+  - httpd-tools

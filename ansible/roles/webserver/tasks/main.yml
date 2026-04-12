@@ -1,0 +1,66 @@
+---
+# ── Apache httpd setup ────────────────────────────────────────────────────────
+
+- name: Install Apache httpd and SSL module
+  ansible.builtin.dnf:
+    name: "{{ [webserver_package] + webserver_additional_packages }}"
+    state: present
+
+- name: Ensure document root exists
+  ansible.builtin.file:
+    path: "{{ webserver_document_root }}"
+    state: directory
+    owner: apache
+    group: apache
+    mode: "0755"
+
+- name: Deploy Apache main config
+  ansible.builtin.template:
+    src: httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/httpd -t -f %s
+  notify: Restart httpd
+
+- name: Deploy default index page
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ webserver_document_root }}/index.html"
+    owner: apache
+    group: apache
+    mode: "0644"
+
+- name: Allow httpd to make network connections (SELinux)
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when: ansible_selinux.status != 'disabled'
+
+- name: Allow httpd to connect to non-standard port via SELinux
+  community.general.seport:
+    ports: "{{ webserver_http_port }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when:
+    - ansible_selinux.status != 'disabled'
+    - webserver_http_port != 80
+
+- name: Enable and start httpd
+  ansible.builtin.systemd:
+    name: "{{ webserver_service }}"
+    enabled: true
+    state: started
+
+- name: Verify Apache is responding
+  ansible.builtin.uri:
+    url: "http://localhost:{{ webserver_http_port }}/"
+    method: GET
+    status_code: [200, 403]
+  retries: 3
+  delay: 5
+  register: apache_check
+  until: apache_check.status in [200, 403]

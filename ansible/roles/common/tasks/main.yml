@@ -1,0 +1,47 @@
+---
+# ── Common tasks for all RHEL servers ────────────────────────────────────────
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Ensure dnf cache is up to date
+  ansible.builtin.dnf:
+    update_cache: true
+
+- name: Install common utilities
+  ansible.builtin.dnf:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Set SELinux to enforcing
+  ansible.posix.selinux:
+    state: "{{ selinux_state }}"
+    policy: targeted
+  when: ansible_selinux.status != 'disabled'
+
+- name: Enable and start firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Open required TCP ports in firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ firewall_allowed_tcp_ports }}"
+
+- name: Configure system-wide ulimits for services
+  ansible.builtin.blockinfile:
+    path: /etc/security/limits.d/90-app.conf
+    create: true
+    mode: "0644"
+    block: |
+      # Raised limits for application services
+      *    soft nofile 65536
+      *    hard nofile 65536
+      *    soft nproc  32768
+      *    hard nproc  32768

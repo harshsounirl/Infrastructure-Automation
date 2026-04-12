@@ -1,0 +1,23 @@
+---
+demo_service_name: demo-app
+demo_service_user: demoapp
+demo_service_group: demoapp
+demo_service_home: /opt/demo-app
+demo_service_jar: demo-app.jar
+demo_service_port: 8080
+demo_service_java_opts: "-Xms256m -Xmx512m -Djava.security.egd=file:/dev/./urandom"
+demo_service_spring_profiles: "{{ env | default('dev') }}"
+demo_service_log_dir: /var/log/demo-app
+demo_service_config_dir: /etc/demo-app
+
+# ── Smart node-selection thresholds ──────────────────────────────────────────
+# Weights used by the scoring algorithm (must sum to 100)
+node_score_weight_cpu:    40   # % weight for CPU idle
+node_score_weight_memory: 35   # % weight for free memory
+node_score_weight_disk:   15   # % weight for free disk
+node_score_weight_load:   10   # % weight for load-average headroom
+
+# Minimum requirements to be eligible for primary deployment
+node_min_cpu_idle_pct:    20   # reject nodes with < 20 % CPU idle
+node_min_memory_free_mb: 512   # reject nodes with < 512 MB free RAM
+node_min_disk_free_mb:   1024  # reject nodes with < 1 GB free disk on /opt

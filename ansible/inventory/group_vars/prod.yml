@@ -1,0 +1,11 @@
+---
+# Production overrides
+env: prod
+demo_service_java_opts: >-
+  -Xms512m
+  -Xmx1g
+  -Djava.security.egd=file:/dev/./urandom
+  -XX:+UseG1GC
+  -XX:+HeapDumpOnOutOfMemoryError
+  -XX:HeapDumpPath=/var/log/demo-app/heapdump.hprof
+selinux_state: enforcing

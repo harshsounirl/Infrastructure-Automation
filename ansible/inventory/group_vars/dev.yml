@@ -1,0 +1,8 @@
+---
+# Dev overrides
+env: dev
+demo_service_java_opts: >-
+  -Xms128m
+  -Xmx256m
+  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+  -Djava.security.egd=file:/dev/./urandom

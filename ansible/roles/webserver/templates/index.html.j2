@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ webserver_welcome_message }}</title>
+  <style>
+    body { font-family: sans-serif; background: #1a1a2e; color: #eee; display: flex;
+           align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .card { background: #16213e; border-radius: 12px; padding: 40px 60px; text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,.5); }
+    h1 { color: #e94560; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px;
+             background: #0f3460; color: #e94560; font-size: .85em; margin: 4px; }
+    a { color: #e94560; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>{{ webserver_welcome_message }}</h1>
+    <p>Managed by <strong>Ansible</strong> on <strong>{{ ansible_distribution }} {{ ansible_distribution_version }}</strong></p>
+    <p>
+      <span class="badge">Env: {{ env }}</span>
+      <span class="badge">Host: {{ inventory_hostname }}</span>
+      <span class="badge">Java 17</span>
+    </p>
+    <p>Demo App: <a href="/app/health">/app/health</a> &nbsp;|&nbsp; <a href="/app/">/app/</a></p>
+  </div>
+</body>
+</html>

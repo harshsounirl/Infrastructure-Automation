@@ -1,0 +1,48 @@
+# Managed by Ansible – do not edit manually
+# Template: roles/demo_service/templates/demo-service.service.j2
+
+[Unit]
+Description=Demo Application Service (Java 17)
+Documentation=https://github.com/harshsounirl/infrastructure-automation
+After=network-online.target
+Wants=network-online.target
+After=httpd.service
+
+[Service]
+Type=simple
+User={{ demo_service_user }}
+Group={{ demo_service_group }}
+
+WorkingDirectory={{ demo_service_home }}
+
+Environment="JAVA_HOME={{ java_home }}"
+Environment="SPRING_PROFILES_ACTIVE={{ demo_service_spring_profiles }}"
+Environment="SERVER_PORT={{ demo_service_port }}"
+EnvironmentFile=-{{ demo_service_config_dir }}/application.properties
+
+ExecStart={{ java_home }}/bin/java \
+  {{ demo_service_java_opts }} \
+  -jar {{ demo_service_home }}/{{ demo_service_jar }}
+
+# Graceful shutdown
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=30
+KillMode=mixed
+
+StandardOutput=append:{{ demo_service_log_dir }}/app.log
+StandardError=append:{{ demo_service_log_dir }}/app-error.log
+
+# Restart policy – restart on failure, back-off up to 5 min
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths={{ demo_service_log_dir }} {{ demo_service_config_dir }}
+
+[Install]
+WantedBy=multi-user.target

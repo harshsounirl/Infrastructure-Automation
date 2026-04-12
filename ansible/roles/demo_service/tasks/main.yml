@@ -1,0 +1,366 @@
+---
+# ── Demo Service deployment ───────────────────────────────────────────────────
+# Includes:
+#  1. Node health metric collection
+#  2. Smart node scoring + primary-node election
+#  3. App user / directory setup
+#  4. JAR + config deployment
+#  5. systemd unit + service lifecycle
+#  6. Post-deploy validation checks
+
+# ────────────────────────────────────────────────────────────────────────────
+#  SECTION 1 – Collect node health metrics
+# ────────────────────────────────────────────────────────────────────────────
+
+- name: Gather CPU idle percentage
+  ansible.builtin.shell:
+    cmd: "top -bn2 | grep 'Cpu(s)' | tail -1 | awk '{print $8}' | tr -d '%id,'"
+  register: _cpu_idle_raw
+  changed_when: false
+
+- name: Gather free memory (MB)
+  ansible.builtin.shell:
+    cmd: "free -m | awk '/^Mem:/ {print $7}'"
+  register: _mem_free_raw
+  changed_when: false
+
+- name: Gather free disk space on /opt (MB)
+  ansible.builtin.shell:
+    cmd: "df -BM /opt | awk 'NR==2 {gsub(\"M\",\"\",$4); print $4}'"
+  register: _disk_free_raw
+  changed_when: false
+
+- name: Gather 1-minute load average
+  ansible.builtin.shell:
+    cmd: "cat /proc/loadavg | awk '{print $1}'"
+  register: _load_avg_raw
+  changed_when: false
+
+- name: Store parsed node metrics as host facts
+  ansible.builtin.set_fact:
+    node_cpu_idle:    "{{ _cpu_idle_raw.stdout | float | round(1) }}"
+    node_mem_free_mb: "{{ _mem_free_raw.stdout | int }}"
+    node_disk_free_mb: "{{ _disk_free_raw.stdout | int }}"
+    node_load_avg:    "{{ _load_avg_raw.stdout | float }}"
+    node_cpu_count:   "{{ ansible_processor_vcpus | int }}"
+
+- name: Calculate load-average headroom score (0-100, higher = less loaded)
+  ansible.builtin.set_fact:
+    node_load_headroom: >-
+      {{
+        [
+          100 - ((node_load_avg | float / node_cpu_count | float) * 100) | round(1),
+          0
+        ] | max
+      }}
+
+# Composite score  = Σ (metric_normalised * weight)
+# Each metric is already on a 0-100 scale (cpu_idle %, mem/disk clamped to 100)
+- name: Compute composite node performance score
+  ansible.builtin.set_fact:
+    node_score: >-
+      {{
+        (
+          (node_cpu_idle    | float * node_score_weight_cpu    | int / 100) +
+          ([node_mem_free_mb  | int / 10, 100] | min * node_score_weight_memory | int / 100) +
+          ([node_disk_free_mb | int / 20, 100] | min * node_score_weight_disk   | int / 100) +
+          (node_load_headroom | float * node_score_weight_load | int / 100)
+        ) | round(2)
+      }}
+
+- name: Debug – print node score for this host
+  ansible.builtin.debug:
+    msg: >
+      [SCORE] {{ inventory_hostname }}
+        CPU idle:       {{ node_cpu_idle }} %
+        Free memory:    {{ node_mem_free_mb }} MB
+        Free disk(/opt):{{ node_disk_free_mb }} MB
+        Load avg:       {{ node_load_avg }} (headroom {{ node_load_headroom }} %)
+        → Composite score: {{ node_score }} / 100
+
+# ────────────────────────────────────────────────────────────────────────────
+#  SECTION 2 – Smart primary-node election (runs on every host simultaneously;
+#              each node computes the same winner from shared facts)
+# ────────────────────────────────────────────────────────────────────────────
+
+- name: Collect scores from all hosts in the play
+  ansible.builtin.set_fact:
+    _all_node_scores: >-
+      {{
+        dict(
+          ansible_play_hosts_all
+          | map('extract', hostvars, 'node_score')
+          | map('default', 0)
+          | zip(ansible_play_hosts_all)
+          | map('reverse')
+          | list
+        )
+      }}
+  run_once: true
+  delegate_to: localhost
+  delegate_facts: false
+
+# Filter out nodes that are below minimum eligibility thresholds
+- name: Identify eligible nodes (pass minimum resource requirements)
+  ansible.builtin.set_fact:
+    _eligible_nodes: >-
+      {{
+        ansible_play_hosts_all
+        | select('match', '.*')
+        | list
+        | selectattr('__dummy__', 'undefined')
+        | list
+      }}
+  run_once: true
+  delegate_to: localhost
+
+# A cleaner eligibility check using a loop helper fact
+- name: Build eligibility map
+  ansible.builtin.set_fact:
+    _node_eligible: >-
+      {{
+        (hostvars[inventory_hostname]['node_cpu_idle'] | float >= node_min_cpu_idle_pct | int)
+        and
+        (hostvars[inventory_hostname]['node_mem_free_mb'] | int >= node_min_memory_free_mb | int)
+        and
+        (hostvars[inventory_hostname]['node_disk_free_mb'] | int >= node_min_disk_free_mb | int)
+      }}
+
+- name: Print eligibility status
+  ansible.builtin.debug:
+    msg: >
+      [ELIGIBILITY] {{ inventory_hostname }}:
+        Eligible for primary deployment = {{ _node_eligible }}
+        (CPU idle ≥ {{ node_min_cpu_idle_pct }}%,
+         Mem free ≥ {{ node_min_memory_free_mb }} MB,
+         Disk free ≥ {{ node_min_disk_free_mb }} MB)
+
+# Elect the winner: highest score among eligible nodes
+- name: Elect primary deployment node
+  ansible.builtin.set_fact:
+    primary_deploy_node: >-
+      {{
+        ansible_play_hosts_all
+        | map('extract', hostvars)
+        | selectattr('_node_eligible', 'equalto', True)
+        | sort(attribute='node_score', reverse=True)
+        | map(attribute='inventory_hostname')
+        | first
+        | default(ansible_play_hosts_all | first)
+      }}
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts_all | first }}"
+  delegate_facts: true
+
+- name: Broadcast elected primary node to all hosts
+  ansible.builtin.set_fact:
+    primary_deploy_node: "{{ hostvars[ansible_play_hosts_all | first]['primary_deploy_node'] }}"
+
+- name: Announce primary deployment node
+  ansible.builtin.debug:
+    msg: >
+      [ELECTION] Primary deployment node elected: {{ primary_deploy_node }}
+      (score: {{ hostvars[primary_deploy_node]['node_score'] }})
+  run_once: true
+
+- name: Warn if this host was skipped due to low resources
+  ansible.builtin.debug:
+    msg: >
+      [WARNING] {{ inventory_hostname }} is below minimum resource thresholds.
+      Service will be installed in standby mode only.
+  when: not _node_eligible | bool
+
+# ────────────────────────────────────────────────────────────────────────────
+#  SECTION 3 – Application user & directories
+# ────────────────────────────────────────────────────────────────────────────
+
+- name: Create demo-app system group
+  ansible.builtin.group:
+    name: "{{ demo_service_group }}"
+    system: true
+    state: present
+
+- name: Create demo-app system user
+  ansible.builtin.user:
+    name: "{{ demo_service_user }}"
+    group: "{{ demo_service_group }}"
+    home: "{{ demo_service_home }}"
+    shell: /sbin/nologin
+    system: true
+    create_home: false
+    comment: "Demo Application Service Account"
+
+- name: Create required directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ demo_service_user }}"
+    group: "{{ demo_service_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ demo_service_home }}",       mode: "0750" }
+    - { path: "{{ demo_service_log_dir }}",    mode: "0755" }
+    - { path: "{{ demo_service_config_dir }}", mode: "0750" }
+
+# ────────────────────────────────────────────────────────────────────────────
+#  SECTION 4 – Build & deploy the demo Java application
+# ────────────────────────────────────────────────────────────────────────────
+
+- name: Copy demo Java source file
+  ansible.builtin.copy:
+    src: DemoApp.java
+    dest: "{{ demo_service_home }}/DemoApp.java"
+    owner: "{{ demo_service_user }}"
+    group: "{{ demo_service_group }}"
+    mode: "0644"
+
+- name: Compile DemoApp.java into a runnable JAR
+  ansible.builtin.shell:
+    cmd: |
+      cd {{ demo_service_home }}
+      # Compile
+      javac DemoApp.java
+      # Package into a runnable JAR with a manifest
+      echo 'Main-Class: DemoApp' > manifest.txt
+      jar cfm {{ demo_service_jar }} manifest.txt DemoApp*.class
+      chown {{ demo_service_user }}:{{ demo_service_group }} {{ demo_service_jar }}
+      rm -f manifest.txt DemoApp*.class
+    creates: "{{ demo_service_home }}/{{ demo_service_jar }}"
+  environment:
+    JAVA_HOME: "{{ java_home }}"
+
+- name: Deploy application config
+  ansible.builtin.template:
+    src: application.properties.j2
+    dest: "{{ demo_service_config_dir }}/application.properties"
+    owner: "{{ demo_service_user }}"
+    group: "{{ demo_service_group }}"
+    mode: "0640"
+  notify: Restart demo-app
+
+# ────────────────────────────────────────────────────────────────────────────
+#  SECTION 5 – systemd unit & service lifecycle
+# ────────────────────────────────────────────────────────────────────────────
+
+- name: Deploy systemd unit file
+  ansible.builtin.template:
+    src: demo-service.service.j2
+    dest: "/etc/systemd/system/{{ demo_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart demo-app
+
+- name: Open demo-app port in firewalld
+  ansible.posix.firewalld:
+    port: "{{ demo_service_port }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: Allow SELinux to bind non-standard port {{ demo_service_port }}
+  community.general.seport:
+    ports: "{{ demo_service_port }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  when: ansible_selinux.status != 'disabled'
+
+- name: Enable and start demo-app service (primary node first)
+  ansible.builtin.systemd:
+    name: "{{ demo_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: inventory_hostname == primary_deploy_node
+
+- name: Enable and start demo-app service on secondary nodes
+  ansible.builtin.systemd:
+    name: "{{ demo_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - inventory_hostname != primary_deploy_node
+    - _node_eligible | bool
+
+# ────────────────────────────────────────────────────────────────────────────
+#  SECTION 6 – Post-deploy validation checks
+# ────────────────────────────────────────────────────────────────────────────
+
+- name: VALIDATION – systemd unit is active
+  ansible.builtin.command: systemctl is-active {{ demo_service_name }}
+  register: _svc_active
+  changed_when: false
+  failed_when: _svc_active.stdout != 'active'
+  when: _node_eligible | bool
+
+- name: VALIDATION – demo-app process is running
+  ansible.builtin.shell:
+    cmd: "pgrep -f {{ demo_service_jar }} | wc -l"
+  register: _proc_count
+  changed_when: false
+  failed_when: _proc_count.stdout | int == 0
+  when: _node_eligible | bool
+
+- name: VALIDATION – port {{ demo_service_port }} is listening
+  ansible.builtin.wait_for:
+    port: "{{ demo_service_port }}"
+    host: 127.0.0.1
+    timeout: 30
+    state: started
+  when: _node_eligible | bool
+
+- name: VALIDATION – HTTP health endpoint returns 200
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ demo_service_port }}/health"
+    method: GET
+    status_code: 200
+    timeout: 10
+  register: _health
+  retries: 5
+  delay: 6
+  until: _health.status == 200
+  when: _node_eligible | bool
+
+- name: VALIDATION – response body contains expected content
+  ansible.builtin.assert:
+    that:
+      - "'status' in (_health.json | default({}))"
+      - "(_health.json.status | default('')) in ['UP', 'OK']"
+    fail_msg: >
+      Health endpoint returned unexpected body: {{ _health.content | default('(empty)') }}
+    success_msg: "Health check passed – status: {{ _health.json.status }}"
+  when: _node_eligible | bool
+
+- name: VALIDATION – log directory is writable by service user
+  ansible.builtin.file:
+    path: "{{ demo_service_log_dir }}/startup-check"
+    state: touch
+    owner: "{{ demo_service_user }}"
+    group: "{{ demo_service_group }}"
+    mode: "0640"
+  become_user: "{{ demo_service_user }}"
+  register: _log_write
+  changed_when: false
+
+- name: VALIDATION – cleanup validation artefact
+  ansible.builtin.file:
+    path: "{{ demo_service_log_dir }}/startup-check"
+    state: absent
+  changed_when: false
+
+- name: Print per-node validation summary
+  ansible.builtin.debug:
+    msg:
+      - "══════════════════════════════════════════════════"
+      - " Node      : {{ inventory_hostname }}"
+      - " Score     : {{ node_score }} / 100"
+      - " Primary   : {{ 'YES' if inventory_hostname == primary_deploy_node else 'NO' }}"
+      - " Eligible  : {{ _node_eligible }}"
+      - " Service   : {{ _svc_active.stdout | default('N/A') }}"
+      - " Port      : {{ demo_service_port }} listening ✓"
+      - " Health    : {{ _health.json.status | default('N/A') }}"
+      - "══════════════════════════════════════════════════"

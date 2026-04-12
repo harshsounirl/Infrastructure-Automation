@@ -1,0 +1,73 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+#  Docker Compose – Local laptop Ansible testing stack
+#
+#  Services:
+#    rhel-target   : AlmaLinux 9 (RHEL-compatible) SSH target
+#    ansible-runner: Ansible controller with all tooling
+#
+#  Usage:
+#    docker compose up -d
+#    docker compose exec ansible-runner bash
+#    # Inside the container:
+#    ansible-playbook -i inventory/hosts.ini playbooks/rhel_webserver.yml -l docker_local
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── RHEL-compatible target node ───────────────────────────────────────────
+  rhel-target:
+    build:
+      context: ./rhel-target
+      dockerfile: Dockerfile
+      args:
+        ANSIBLE_USER: ansible
+        ANSIBLE_PASSWORD: ansible123
+    container_name: rhel-target
+    hostname: rhel-target
+    privileged: true                   # needed for systemd + firewalld in container
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    ports:
+      - "2222:22"                      # SSH (ansible connects here)
+      - "9090:80"                      # Apache HTTP
+      - "8080:8080"                    # Demo app
+    networks:
+      - infra-net
+    healthcheck:
+      test: ["CMD", "ssh", "-o", "StrictHostKeyChecking=no",
+             "-o", "ConnectTimeout=3",
+             "-p", "22", "localhost", "echo ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Ansible controller (mirrors the devcontainer) ─────────────────────────
+  ansible-runner:
+    build:
+      context: ../.devcontainer
+      dockerfile: Dockerfile
+    container_name: ansible-runner
+    hostname: ansible-runner
+    working_dir: /workspace
+    volumes:
+      - ../:/workspace                 # mount whole repo
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ansible-cache:/tmp/ansible-facts
+    environment:
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+      ANSIBLE_FORCE_COLOR: "1"
+    networks:
+      - infra-net
+    depends_on:
+      rhel-target:
+        condition: service_healthy
+    command: sleep infinity             # keep container alive for exec
+
+networks:
+  infra-net:
+    driver: bridge
+
+volumes:
+  ansible-cache:

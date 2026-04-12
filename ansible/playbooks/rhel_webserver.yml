@@ -1,0 +1,95 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+#  Playbook: RHEL Web Server + Java 17 + Demo Service
+#
+#  Usage:
+#    # All RHEL servers
+#    ansible-playbook playbooks/rhel_webserver.yml
+#
+#    # Local Docker only (laptop testing)
+#    ansible-playbook playbooks/rhel_webserver.yml -l docker_local
+#
+#    # With a vault password file
+#    ansible-playbook playbooks/rhel_webserver.yml --vault-password-file .vault_pass
+#
+#    # Dry-run
+#    ansible-playbook playbooks/rhel_webserver.yml --check --diff
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: RHEL – Base Configuration
+  hosts: rhel_servers
+  gather_facts: true
+  become: true
+  tags: [common]
+
+  pre_tasks:
+    - name: Verify target OS is Red Hat family
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "RedHat"
+        fail_msg: >
+          This playbook is designed for Red Hat family OS.
+          Detected: {{ ansible_os_family }}
+        success_msg: "OS check passed: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Print deployment info
+      ansible.builtin.debug:
+        msg:
+          - "Host        : {{ inventory_hostname }}"
+          - "Environment : {{ env }}"
+          - "OS          : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel      : {{ ansible_kernel }}"
+
+  roles:
+    - role: common
+
+- name: RHEL – Apache Web Server
+  hosts: rhel_servers
+  gather_facts: true
+  become: true
+  tags: [webserver]
+
+  roles:
+    - role: webserver
+
+- name: RHEL – Java 17 Runtime
+  hosts: rhel_servers
+  gather_facts: true
+  become: true
+  tags: [java]
+
+  roles:
+    - role: java17
+
+- name: RHEL – Demo Application Service
+  hosts: rhel_servers
+  gather_facts: true
+  become: true
+  tags: [demo_service, app]
+
+  roles:
+    - role: demo_service
+
+  post_tasks:
+    - name: Wait for demo service HTTP health check
+      ansible.builtin.uri:
+        url: "http://localhost:{{ demo_service_port }}/health"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: health_result
+      retries: 6
+      delay: 10
+      until: health_result.status == 200
+      tags: [health_check]
+
+    - name: Print deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - " Deployment complete on {{ inventory_hostname }} ({{ env }})"
+          - "------------------------------------------------------------"
+          - " Apache  : http://{{ ansible_default_ipv4.address }}:{{ webserver_http_port }}"
+          - " Demo App: http://{{ ansible_default_ipv4.address }}:{{ demo_service_port }}"
+          - "============================================================"
+      tags: [always]

@@ -1,0 +1,15 @@
+---
+# Common role defaults
+common_packages:
+  - curl
+  - wget
+  - vim
+  - git
+  - unzip
+  - tar
+  - net-tools
+  - lsof
+  - htop
+  - nss-tools
+
+timezone: UTC

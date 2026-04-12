@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  .gitattributes – enforce LF line endings across the entire repository.
+#  This prevents CRLF/LF mismatches between Windows and Linux/macOS dev boxes
+#  and ensures Ansible/Bash scripts are never broken by carriage returns.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default: normalise everything to LF on commit, checkout as LF everywhere
+* text=auto eol=lf
+
+# ── Explicitly text files (always LF) ────────────────────────────────────────
+*.yml         text eol=lf
+*.yaml        text eol=lf
+*.json        text eol=lf
+*.toml        text eol=lf
+*.ini         text eol=lf
+*.cfg         text eol=lf
+*.conf        text eol=lf
+*.properties  text eol=lf
+
+# Source code
+*.java        text eol=lf
+*.py          text eol=lf
+*.sh          text eol=lf
+*.bash        text eol=lf
+
+# Jinja2 templates
+*.j2          text eol=lf
+*.jinja       text eol=lf
+*.jinja2      text eol=lf
+
+# CI / build files
+Jenkinsfile   text eol=lf
+Dockerfile    text eol=lf
+Makefile      text eol=lf
+*.env         text eol=lf
+
+# Documentation
+*.md          text eol=lf
+*.rst         text eol=lf
+*.txt         text eol=lf
+LICENSE       text eol=lf
+
+# CSV / audit templates
+*.csv         text eol=lf
+
+# ── Binary files (never touch line endings) ───────────────────────────────────
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.jar   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.pdf   binary
+*.class binary
+*.keystore binary
+*.p12   binary
+*.pem   binary
