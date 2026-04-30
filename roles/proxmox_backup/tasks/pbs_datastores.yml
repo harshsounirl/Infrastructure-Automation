@@ -1,0 +1,71 @@
+---
+# tasks/pbs_datastores.yml - Create and configure PBS datastores
+
+- name: Retrieve existing PBS datastores
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/datastore"
+    method: GET
+    headers: "{{ _pbs_auth_headers }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  register: _pbs_existing_datastores
+
+- name: Build list of existing datastore names
+  ansible.builtin.set_fact:
+    _pbs_existing_datastore_names: >-
+      {{ _pbs_existing_datastores.json.data | map(attribute='name') | list }}
+
+- name: Create PBS datastore (if not present)
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/datastore"
+    method: POST
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      path: "{{ item.path }}"
+      comment: "{{ item.comment | default('Ansible-managed datastore') }}"
+      gc-schedule: "{{ item.gc_schedule | default('daily') }}"
+      prune-schedule: "{{ item.prune_schedule | default('daily') }}"
+      verify-new: "{{ item.verify_new | default(false) | bool | lower }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  loop: "{{ pbs_datastores }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.name not in _pbs_existing_datastore_names
+
+- name: Update PBS datastore configuration (if present)
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/datastore/{{ item.name }}"
+    method: PUT
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body:
+      comment: "{{ item.comment | default('Ansible-managed datastore') }}"
+      gc-schedule: "{{ item.gc_schedule | default('daily') }}"
+      prune-schedule: "{{ item.prune_schedule | default('daily') }}"
+      verify-new: "{{ item.verify_new | default(false) | bool | lower }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  loop: "{{ pbs_datastores }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.name in _pbs_existing_datastore_names
+
+- name: Retrieve datastores after configuration
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/datastore"
+    method: GET
+    headers: "{{ _pbs_auth_headers }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  register: _pbs_configured_datastores
+
+- name: Display configured datastores
+  ansible.builtin.debug:
+    msg: >
+      Datastores configured: {{ _pbs_configured_datastores.json.data
+        | selectattr('name', 'in', pbs_datastores | map(attribute='name') | list)
+        | map(attribute='name')
+        | list }}

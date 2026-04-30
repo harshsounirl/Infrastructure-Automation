@@ -1,0 +1,58 @@
+---
+# tasks/main.yml - Entry point for proxmox_backup role
+
+- name: Display proxmox_backup role version
+  ansible.builtin.debug:
+    msg: "proxmox_backup role v{{ proxmox_backup_role_version }}"
+  tags: [proxmox_backup]
+
+- name: Validate role configuration
+  ansible.builtin.include_tasks: validate.yml
+  tags: [proxmox_backup, validate]
+
+# ─── PBS-side management ─────────────────────────────────────────────
+- name: Authenticate to PBS API
+  ansible.builtin.include_tasks: pbs_auth.yml
+  when: proxmox_backup_manage_pbs | bool
+  tags: [proxmox_backup, pbs, auth]
+
+- name: Manage PBS datastores
+  ansible.builtin.include_tasks: pbs_datastores.yml
+  when:
+    - proxmox_backup_manage_pbs | bool
+    - pbs_datastores | length > 0
+  tags: [proxmox_backup, pbs, datastores]
+
+- name: Configure PBS prune jobs
+  ansible.builtin.include_tasks: pbs_prune_jobs.yml
+  when:
+    - proxmox_backup_manage_pbs | bool
+    - pbs_prune_jobs_enabled | bool
+    - pbs_datastores | length > 0
+  tags: [proxmox_backup, pbs, prune]
+
+- name: Configure PBS verification jobs
+  ansible.builtin.include_tasks: pbs_verify_jobs.yml
+  when:
+    - proxmox_backup_manage_pbs | bool
+    - pbs_verify_jobs_enabled | bool
+    - pbs_datastores | length > 0
+  tags: [proxmox_backup, pbs, verify]
+
+- name: Configure PBS notifications
+  ansible.builtin.include_tasks: pbs_notifications.yml
+  when:
+    - proxmox_backup_manage_pbs | bool
+    - pbs_notification_enabled | bool
+  tags: [proxmox_backup, pbs, notifications]
+
+# ─── PVE-side backup job management ─────────────────────────────────
+- name: Authenticate to PVE API
+  ansible.builtin.include_tasks: pve_auth.yml
+  when: proxmox_backup_manage_pve_jobs | bool
+  tags: [proxmox_backup, pve, auth]
+
+- name: Manage PVE backup jobs
+  ansible.builtin.include_tasks: pve_backup_jobs.yml
+  when: proxmox_backup_manage_pve_jobs | bool
+  tags: [proxmox_backup, pve, backup_jobs]

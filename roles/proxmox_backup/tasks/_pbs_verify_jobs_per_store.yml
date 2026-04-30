@@ -1,0 +1,95 @@
+---
+# tasks/_pbs_verify_jobs_per_store.yml - Helper: manage verify jobs for one datastore
+# Called by pbs_verify_jobs.yml with _current_datastore loop var
+
+- name: "Set verify job comment identifiers for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _critical_verify_comment: "ansible-managed:critical-verify:{{ _current_datastore.name }}"
+    _standard_verify_comment: "ansible-managed:standard-verify:{{ _current_datastore.name }}"
+
+# ─── Critical verify job ─────────────────────────────────────────────
+- name: "Find existing critical verify job for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _existing_critical_verify: >-
+      {{ _pbs_existing_verify_jobs.json.data
+         | selectattr('comment', 'defined')
+         | selectattr('comment', 'equalto', _critical_verify_comment)
+         | list
+         | first | default({}) }}
+
+- name: "Create critical verify job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/verify"
+    method: POST
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body:
+      store: "{{ _current_datastore.name }}"
+      schedule: "{{ pbs_critical_verify_schedule }}"
+      outdated-after: "{{ pbs_verify_outdated_after }}"
+      comment: "{{ _critical_verify_comment }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when:
+    - pbs_critical_vmids | length > 0
+    - _existing_critical_verify | length == 0
+
+- name: "Update critical verify job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/verify/{{ _existing_critical_verify.id }}"
+    method: PUT
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body:
+      store: "{{ _current_datastore.name }}"
+      schedule: "{{ pbs_critical_verify_schedule }}"
+      outdated-after: "{{ pbs_verify_outdated_after }}"
+      comment: "{{ _critical_verify_comment }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when:
+    - pbs_critical_vmids | length > 0
+    - _existing_critical_verify | length > 0
+    - _existing_critical_verify.id is defined
+
+# ─── Standard verify job ─────────────────────────────────────────────
+- name: "Find existing standard verify job for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _existing_standard_verify: >-
+      {{ _pbs_existing_verify_jobs.json.data
+         | selectattr('comment', 'defined')
+         | selectattr('comment', 'equalto', _standard_verify_comment)
+         | list
+         | first | default({}) }}
+
+- name: "Create standard verify job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/verify"
+    method: POST
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body:
+      store: "{{ _current_datastore.name }}"
+      schedule: "{{ pbs_standard_verify_schedule }}"
+      outdated-after: "{{ pbs_verify_outdated_after }}"
+      comment: "{{ _standard_verify_comment }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when: _existing_standard_verify | length == 0
+
+- name: "Update standard verify job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/verify/{{ _existing_standard_verify.id }}"
+    method: PUT
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body:
+      store: "{{ _current_datastore.name }}"
+      schedule: "{{ pbs_standard_verify_schedule }}"
+      outdated-after: "{{ pbs_verify_outdated_after }}"
+      comment: "{{ _standard_verify_comment }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when:
+    - _existing_standard_verify | length > 0
+    - _existing_standard_verify.id is defined

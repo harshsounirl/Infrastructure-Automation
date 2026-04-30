@@ -1,0 +1,22 @@
+---
+# tasks/pbs_verify_jobs.yml - Configure PBS verification jobs per datastore
+#
+# Creates two verify jobs per datastore:
+#   - "ansible-managed:critical-verify" with pbs_critical_verify_schedule
+#   - "ansible-managed:standard-verify" with pbs_standard_verify_schedule
+
+- name: Retrieve existing PBS verification jobs
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/verify"
+    method: GET
+    headers: "{{ _pbs_auth_headers }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  register: _pbs_existing_verify_jobs
+
+- name: Process verification jobs for each configured datastore
+  ansible.builtin.include_tasks: _pbs_verify_jobs_per_store.yml
+  loop: "{{ pbs_datastores }}"
+  loop_control:
+    loop_var: _current_datastore
+    label: "{{ _current_datastore.name }}"

@@ -1,0 +1,105 @@
+---
+# tasks/_pbs_prune_jobs_per_store.yml - Helper: manage prune jobs for one datastore
+# Called by pbs_prune_jobs.yml with _current_datastore loop var
+
+- name: "Set prune job facts for datastore {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _critical_prune_comment: "ansible-managed:critical-prune:{{ _current_datastore.name }}"
+    _standard_prune_comment: "ansible-managed:standard-prune:{{ _current_datastore.name }}"
+
+- name: "Build critical prune job body for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _critical_prune_body:
+      store: "{{ _current_datastore.name }}"
+      schedule: "{{ pbs_critical_prune_schedule }}"
+      keep-last: "{{ pbs_critical_retention.keep_last | int }}"
+      keep-hourly: "{{ pbs_critical_retention.keep_hourly | int }}"
+      keep-daily: "{{ pbs_critical_retention.keep_daily | int }}"
+      keep-weekly: "{{ pbs_critical_retention.keep_weekly | int }}"
+      keep-monthly: "{{ pbs_critical_retention.keep_monthly | int }}"
+      keep-yearly: "{{ pbs_critical_retention.keep_yearly | int }}"
+      comment: "{{ _critical_prune_comment }}"
+
+- name: "Build standard prune job body for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _standard_prune_body:
+      store: "{{ _current_datastore.name }}"
+      schedule: "{{ pbs_standard_prune_schedule }}"
+      keep-last: "{{ pbs_standard_retention.keep_last | int }}"
+      keep-hourly: "{{ pbs_standard_retention.keep_hourly | int }}"
+      keep-daily: "{{ pbs_standard_retention.keep_daily | int }}"
+      keep-weekly: "{{ pbs_standard_retention.keep_weekly | int }}"
+      keep-monthly: "{{ pbs_standard_retention.keep_monthly | int }}"
+      keep-yearly: "{{ pbs_standard_retention.keep_yearly | int }}"
+      comment: "{{ _standard_prune_comment }}"
+
+# ─── Critical prune job ──────────────────────────────────────────────
+- name: "Find existing critical prune job for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _existing_critical_prune: >-
+      {{ _pbs_existing_prune_jobs.json.data
+         | selectattr('comment', 'defined')
+         | selectattr('comment', 'equalto', _critical_prune_comment)
+         | list
+         | first | default({}) }}
+
+- name: "Create critical prune job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/prune"
+    method: POST
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body: "{{ _critical_prune_body }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when:
+    - pbs_critical_vmids | length > 0
+    - _existing_critical_prune | length == 0
+
+- name: "Update critical prune job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/prune/{{ _existing_critical_prune.id }}"
+    method: PUT
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body: "{{ _critical_prune_body }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when:
+    - pbs_critical_vmids | length > 0
+    - _existing_critical_prune | length > 0
+    - _existing_critical_prune.id is defined
+
+# ─── Standard prune job ───────────────────────────────────────────────
+- name: "Find existing standard prune job for {{ _current_datastore.name }}"
+  ansible.builtin.set_fact:
+    _existing_standard_prune: >-
+      {{ _pbs_existing_prune_jobs.json.data
+         | selectattr('comment', 'defined')
+         | selectattr('comment', 'equalto', _standard_prune_comment)
+         | list
+         | first | default({}) }}
+
+- name: "Create standard prune job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/prune"
+    method: POST
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body: "{{ _standard_prune_body }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when: _existing_standard_prune | length == 0
+
+- name: "Update standard prune job for {{ _current_datastore.name }}"
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/prune/{{ _existing_standard_prune.id }}"
+    method: PUT
+    headers: "{{ _pbs_auth_headers }}"
+    body_format: json
+    body: "{{ _standard_prune_body }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  when:
+    - _existing_standard_prune | length > 0
+    - _existing_standard_prune.id is defined

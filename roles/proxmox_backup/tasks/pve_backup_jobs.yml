@@ -1,0 +1,216 @@
+---
+# tasks/pve_backup_jobs.yml - Create and manage PVE cluster backup jobs
+#
+# Job strategy:
+#   critical job : targets pbs_critical_vmids  – high-frequency, full backups
+#   standard job : targets remaining VMs        – nightly, standard retention
+#   custom jobs  : pve_backup_jobs list         – fully user-defined
+
+# ─── Discover all VMs/CTs ────────────────────────────────────────────
+- name: Query PVE cluster resources (VMs and CTs)
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/cluster/resources?type=vm"
+    method: GET
+    headers: "{{ _pve_auth_headers }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  register: _pve_cluster_resources
+
+- name: Build set of all VM/CT IDs from PVE
+  ansible.builtin.set_fact:
+    _pve_all_vmids: >-
+      {{ _pve_cluster_resources.json.data
+         | selectattr('type', 'in', ['qemu', 'lxc'])
+         | map(attribute='vmid')
+         | map('int')
+         | list
+         | sort }}
+
+- name: Compute standard VMIDs (all VMs minus critical)
+  ansible.builtin.set_fact:
+    _pbs_standard_vmids: >-
+      {{ _pve_all_vmids
+         | reject('in', pbs_critical_vmids | map('int') | list)
+         | list }}
+
+- name: Display VM classification summary
+  ansible.builtin.debug:
+    msg:
+      - "Total VMs/CTs discovered: {{ _pve_all_vmids | length }}"
+      - "Critical VMIDs: {{ pbs_critical_vmids | join(', ') | default('none') }}"
+      - "Standard VMIDs: {{ _pbs_standard_vmids | join(', ') | default('none') }}"
+
+# ─── Retrieve existing backup jobs ───────────────────────────────────
+- name: Query existing PVE cluster backup jobs
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/cluster/backup"
+    method: GET
+    headers: "{{ _pve_auth_headers }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  register: _pve_existing_backup_jobs
+
+# ─── Critical server backup job ──────────────────────────────────────
+- name: Manage critical server backup job
+  when:
+    - pbs_auto_create_critical_job | bool
+    - pbs_critical_vmids | length > 0
+  block:
+    - name: Find existing critical backup job
+      ansible.builtin.set_fact:
+        _existing_critical_job: >-
+          {{ _pve_existing_backup_jobs.json.data
+             | selectattr('comment', 'defined')
+             | selectattr('comment', 'equalto', _proxmox_backup_critical_comment)
+             | list
+             | first | default({}) }}
+
+    - name: Build critical backup job body
+      ansible.builtin.set_fact:
+        _critical_job_body:
+          vmid: "{{ pbs_critical_vmids | proxmox_vmid_list }}"
+          storage: "{{ pbs_pve_storage_id }}"
+          schedule: "{{ pbs_critical_schedule }}"
+          mode: "{{ pbs_critical_backup_mode }}"
+          compress: "{{ pbs_compression }}"
+          prune-backups: "{{ _pbs_critical_prune_str }}"
+          notes-template: "{{ pbs_backup_notes_template }}"
+          comment: "{{ _proxmox_backup_critical_comment }}"
+          enabled: 1
+          protected: "{{ 1 if pbs_critical_protected | bool else 0 }}"
+          mailnotification: "{{ pbs_mail_notification }}"
+          mailto: "{{ pbs_mailto | default(omit) }}"
+
+    - name: Create critical backup job
+      ansible.builtin.uri:
+        url: "{{ _pve_api_base }}/cluster/backup"
+        method: POST
+        headers: "{{ _pve_auth_headers }}"
+        body_format: json
+        body: "{{ _critical_job_body }}"
+        validate_certs: "{{ pve_validate_certs }}"
+        status_code: 200
+      register: _critical_job_create
+      when: _existing_critical_job | length == 0
+
+    - name: Update critical backup job
+      ansible.builtin.uri:
+        url: "{{ _pve_api_base }}/cluster/backup/{{ _existing_critical_job.id }}"
+        method: PUT
+        headers: "{{ _pve_auth_headers }}"
+        body_format: json
+        body: "{{ _critical_job_body }}"
+        validate_certs: "{{ pve_validate_certs }}"
+        status_code: 200
+      when:
+        - _existing_critical_job | length > 0
+        - _existing_critical_job.id is defined
+
+    - name: Report critical backup job status
+      ansible.builtin.debug:
+        msg: >-
+          Critical backup job
+          {{ 'created' if (_existing_critical_job | length == 0) else 'updated' }}
+          for VMIDs: {{ pbs_critical_vmids | join(', ') }}
+          | Schedule: {{ pbs_critical_schedule }}
+          | Retention: {{ _pbs_critical_prune_str }}
+
+# ─── Apply partial backup disk exclusions ────────────────────────────
+- name: Apply partial backup disk exclusions to VMs
+  ansible.builtin.include_tasks: _pve_partial_disk_exclusion.yml
+  loop: "{{ pbs_partial_vmid_exclusions | dict2items }}"
+  loop_control:
+    loop_var: _vmid_exclusion
+    label: "VMID {{ _vmid_exclusion.key }}"
+  when:
+    - pbs_critical_backup_type == "partial" or pbs_standard_backup_type == "partial"
+    - pbs_partial_vmid_exclusions | length > 0
+
+# ─── Standard server backup job ──────────────────────────────────────
+- name: Manage standard server backup job
+  when:
+    - pbs_auto_create_standard_job | bool
+    - (_pbs_standard_vmids | length > 0) or (pbs_standard_backup_all | bool)
+  block:
+    - name: Find existing standard backup job
+      ansible.builtin.set_fact:
+        _existing_standard_job: >-
+          {{ _pve_existing_backup_jobs.json.data
+             | selectattr('comment', 'defined')
+             | selectattr('comment', 'equalto', _proxmox_backup_standard_comment)
+             | list
+             | first | default({}) }}
+
+    - name: Build standard backup job body (specific VMIDs)
+      ansible.builtin.set_fact:
+        _standard_job_body:
+          vmid: "{{ _pbs_standard_vmids | proxmox_vmid_list }}"
+          storage: "{{ pbs_pve_storage_id }}"
+          schedule: "{{ pbs_standard_schedule }}"
+          mode: "{{ pbs_default_backup_mode }}"
+          compress: "{{ pbs_compression }}"
+          prune-backups: "{{ _pbs_standard_prune_str }}"
+          notes-template: "{{ pbs_backup_notes_template }}"
+          comment: "{{ _proxmox_backup_standard_comment }}"
+          enabled: 1
+          mailnotification: "{{ pbs_mail_notification }}"
+          mailto: "{{ pbs_mailto | default(omit) }}"
+      when: not pbs_standard_backup_all | bool
+
+    - name: Build standard backup job body (all VMs)
+      ansible.builtin.set_fact:
+        _standard_job_body:
+          all: 1
+          storage: "{{ pbs_pve_storage_id }}"
+          schedule: "{{ pbs_standard_schedule }}"
+          mode: "{{ pbs_default_backup_mode }}"
+          compress: "{{ pbs_compression }}"
+          prune-backups: "{{ _pbs_standard_prune_str }}"
+          notes-template: "{{ pbs_backup_notes_template }}"
+          comment: "{{ _proxmox_backup_standard_comment }}"
+          enabled: 1
+          mailnotification: "{{ pbs_mail_notification }}"
+          mailto: "{{ pbs_mailto | default(omit) }}"
+      when: pbs_standard_backup_all | bool
+
+    - name: Create standard backup job
+      ansible.builtin.uri:
+        url: "{{ _pve_api_base }}/cluster/backup"
+        method: POST
+        headers: "{{ _pve_auth_headers }}"
+        body_format: json
+        body: "{{ _standard_job_body }}"
+        validate_certs: "{{ pve_validate_certs }}"
+        status_code: 200
+      when: _existing_standard_job | length == 0
+
+    - name: Update standard backup job
+      ansible.builtin.uri:
+        url: "{{ _pve_api_base }}/cluster/backup/{{ _existing_standard_job.id }}"
+        method: PUT
+        headers: "{{ _pve_auth_headers }}"
+        body_format: json
+        body: "{{ _standard_job_body }}"
+        validate_certs: "{{ pve_validate_certs }}"
+        status_code: 200
+      when:
+        - _existing_standard_job | length > 0
+        - _existing_standard_job.id is defined
+
+    - name: Report standard backup job status
+      ansible.builtin.debug:
+        msg: >-
+          Standard backup job
+          {{ 'created' if (_existing_standard_job | length == 0) else 'updated' }}
+          for {{ _pbs_standard_vmids | length }} VM(s)
+          | Schedule: {{ pbs_standard_schedule }}
+          | Retention: {{ _pbs_standard_prune_str }}
+
+# ─── Custom backup jobs ───────────────────────────────────────────────
+- name: Process custom backup jobs
+  ansible.builtin.include_tasks: _pve_custom_backup_job.yml
+  loop: "{{ pve_backup_jobs }}"
+  loop_control:
+    loop_var: _custom_job
+    label: "{{ _custom_job.comment | default('custom-job-' + loop.index | string) }}"
+  when: pve_backup_jobs | length > 0

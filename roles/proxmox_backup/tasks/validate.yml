@@ -1,0 +1,99 @@
+---
+# tasks/validate.yml - Pre-flight validation for proxmox_backup role
+
+- name: Assert PBS connection variables are set
+  ansible.builtin.assert:
+    that:
+      - pbs_host | length > 0
+    fail_msg: "pbs_host must be set when proxmox_backup_manage_pbs is true"
+  when: proxmox_backup_manage_pbs | bool
+
+- name: Assert PBS authentication is configured
+  ansible.builtin.assert:
+    that:
+      - (pbs_password | length > 0) or (pbs_api_token_id | length > 0 and pbs_api_token_secret | length > 0)
+    fail_msg: >
+      PBS authentication not configured. Set either pbs_password
+      or both pbs_api_token_id and pbs_api_token_secret.
+  when: proxmox_backup_manage_pbs | bool
+
+- name: Assert PVE connection variables are set
+  ansible.builtin.assert:
+    that:
+      - pve_host | length > 0
+    fail_msg: "pve_host must be set when proxmox_backup_manage_pve_jobs is true"
+  when: proxmox_backup_manage_pve_jobs | bool
+
+- name: Assert PVE authentication is configured
+  ansible.builtin.assert:
+    that:
+      - (pve_password | length > 0) or (pve_api_token_id | length > 0 and pve_api_token_secret | length > 0)
+    fail_msg: >
+      PVE authentication not configured. Set either pve_password
+      or both pve_api_token_id and pve_api_token_secret.
+  when: proxmox_backup_manage_pve_jobs | bool
+
+- name: Assert backup mode values are valid
+  ansible.builtin.assert:
+    that:
+      - pbs_default_backup_mode in _proxmox_backup_valid_modes
+      - pbs_critical_backup_mode in _proxmox_backup_valid_modes
+    fail_msg: "Backup mode must be one of: {{ _proxmox_backup_valid_modes | join(', ') }}"
+
+- name: Assert backup type values are valid
+  ansible.builtin.assert:
+    that:
+      - pbs_critical_backup_type in _proxmox_backup_valid_types
+      - pbs_standard_backup_type in _proxmox_backup_valid_types
+    fail_msg: "Backup type must be one of: {{ _proxmox_backup_valid_types | join(', ') }}"
+
+- name: Assert compression value is valid
+  ansible.builtin.assert:
+    that:
+      - pbs_compression in _proxmox_backup_valid_compress
+    fail_msg: "pbs_compression must be one of: {{ _proxmox_backup_valid_compress | join(', ') }}"
+
+- name: Assert critical VMIDs are present when critical job is enabled
+  ansible.builtin.assert:
+    that:
+      - pbs_critical_vmids | length > 0
+    fail_msg: >
+      pbs_auto_create_critical_job is true but pbs_critical_vmids is empty.
+      Either add VMIDs to pbs_critical_vmids or set pbs_auto_create_critical_job: false.
+  when:
+    - proxmox_backup_manage_pve_jobs | bool
+    - pbs_auto_create_critical_job | bool
+
+- name: Assert SMTP settings are complete when notification is smtp
+  ansible.builtin.assert:
+    that:
+      - pbs_smtp_server | length > 0
+      - pbs_smtp_from | length > 0
+      - pbs_smtp_to | length > 0
+    fail_msg: "pbs_smtp_server, pbs_smtp_from, and pbs_smtp_to must be set when pbs_notification_type is smtp"
+  when:
+    - pbs_notification_enabled | bool
+    - pbs_notification_type == "smtp"
+
+- name: Warn if no datastores configured when PBS management is enabled
+  ansible.builtin.debug:
+    msg: >
+      WARNING: proxmox_backup_manage_pbs is true but pbs_datastores is empty.
+      Prune, verify, and notification tasks will be skipped.
+  when:
+    - proxmox_backup_manage_pbs | bool
+    - pbs_datastores | length == 0
+
+- name: Build critical retention prune string
+  ansible.builtin.set_fact:
+    _pbs_critical_prune_str: "{{ pbs_critical_retention | proxmox_prune_string }}"
+    _pbs_standard_prune_str: "{{ pbs_standard_retention | proxmox_prune_string }}"
+
+- name: Assert retention strings are non-empty
+  ansible.builtin.assert:
+    that:
+      - _pbs_critical_prune_str | length > 0
+      - _pbs_standard_prune_str | length > 0
+    fail_msg: >
+      Retention policy produced an empty prune string.
+      At least one keep_* value must be > 0 in pbs_critical_retention and pbs_standard_retention.

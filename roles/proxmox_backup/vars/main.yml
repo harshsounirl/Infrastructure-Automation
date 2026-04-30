@@ -1,0 +1,27 @@
+---
+# vars/main.yml - Internal constants for proxmox_backup role
+
+_pbs_api_base: "https://{{ pbs_host }}:{{ pbs_port }}/api2/json"
+_pve_api_base: "https://{{ pve_host }}:{{ pve_port }}/api2/json"
+
+# Comment markers used to identify ansible-managed backup jobs
+_proxmox_backup_critical_comment: "ansible-managed:critical-backup"
+_proxmox_backup_standard_comment: "ansible-managed:standard-backup"
+
+# Supported backup modes
+_proxmox_backup_valid_modes:
+  - snapshot
+  - suspend
+  - stop
+
+# Supported backup types (role-level concept)
+_proxmox_backup_valid_types:
+  - full
+  - partial
+
+# Supported compression options
+_proxmox_backup_valid_compress:
+  - "0"
+  - lzo
+  - gzip
+  - zstd

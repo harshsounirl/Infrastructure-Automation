@@ -1,0 +1,49 @@
+---
+# tasks/pbs_auth.yml - Authenticate to the Proxmox Backup Server API
+#
+# Supports two auth methods:
+#   1. API token  : Authorization: PBSAPIToken=<tokenid>:<secret>
+#   2. Password   : POST /access/ticket -> PBSAuthCookie + CSRFPreventionToken
+
+- name: Set PBS auth headers using API token
+  ansible.builtin.set_fact:
+    _pbs_auth_headers:
+      Authorization: "PBSAPIToken={{ pbs_api_token_id }}:{{ pbs_api_token_secret }}"
+  no_log: true
+  when: pbs_api_token_id | length > 0
+
+- name: Obtain PBS ticket via password authentication
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/access/ticket"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      username: "{{ pbs_user }}"
+      password: "{{ pbs_password }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  register: _pbs_ticket_response
+  no_log: true
+  when: pbs_api_token_id | length == 0
+
+- name: Set PBS auth headers from ticket
+  ansible.builtin.set_fact:
+    _pbs_auth_headers:
+      Cookie: "PBSAuthCookie={{ _pbs_ticket_response.json.data.ticket }}"
+      CSRFPreventionToken: "{{ _pbs_ticket_response.json.data.CSRFPreventionToken }}"
+  no_log: true
+  when: pbs_api_token_id | length == 0
+
+- name: Verify PBS API connectivity
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/version"
+    method: GET
+    headers: "{{ _pbs_auth_headers }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  register: _pbs_version
+  failed_when: _pbs_version.status != 200
+
+- name: Display PBS version
+  ansible.builtin.debug:
+    msg: "Connected to PBS {{ _pbs_version.json.data.version }} (release {{ _pbs_version.json.data.release }})"

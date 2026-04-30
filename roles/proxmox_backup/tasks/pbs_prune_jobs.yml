@@ -1,0 +1,22 @@
+---
+# tasks/pbs_prune_jobs.yml - Configure PBS prune jobs per datastore
+#
+# Creates two prune jobs per datastore:
+#   - "ansible-managed:critical-prune" targeting pbs_critical_vmids
+#   - "ansible-managed:standard-prune" for all other backups
+
+- name: Retrieve existing PBS prune jobs
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/prune"
+    method: GET
+    headers: "{{ _pbs_auth_headers }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: 200
+  register: _pbs_existing_prune_jobs
+
+- name: Process prune jobs for each configured datastore
+  ansible.builtin.include_tasks: _pbs_prune_jobs_per_store.yml
+  loop: "{{ pbs_datastores }}"
+  loop_control:
+    loop_var: _current_datastore
+    label: "{{ _current_datastore.name }}"

@@ -1,0 +1,31 @@
+---
+galaxy_info:
+  role_name: proxmox_backup
+  author: "Infrastructure Automation Team"
+  description: >
+    Ansible role for managing Proxmox Backup Server (PBS) configuration and
+    PVE cluster backup jobs via the Proxmox REST API. Supports critical vs.
+    standard server classification, full and partial backup types, configurable
+    retention/schedule policies, datastore management, prune/verify jobs,
+    and SMTP notifications.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+  galaxy_tags:
+    - proxmox
+    - backup
+    - proxmox_backup_server
+    - pbs
+    - pve
+    - infrastructure
+    - virtualization
+
+dependencies: []

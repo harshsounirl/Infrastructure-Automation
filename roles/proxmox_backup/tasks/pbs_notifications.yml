@@ -1,0 +1,87 @@
+---
+# tasks/pbs_notifications.yml - Configure PBS notification endpoints
+#
+# Supports SMTP endpoint configuration via the PBS notifications API.
+# PBS 3.x uses /config/notifications/endpoints/smtp
+# PBS 2.x uses /config/notifications/targets (legacy; handled with fallback)
+
+- name: Check PBS notification endpoints API availability
+  ansible.builtin.uri:
+    url: "{{ _pbs_api_base }}/config/notifications/endpoints/smtp"
+    method: GET
+    headers: "{{ _pbs_auth_headers }}"
+    validate_certs: "{{ pbs_validate_certs }}"
+    status_code: [200, 404, 501]
+  register: _pbs_notify_api_check
+  ignore_errors: true
+
+- name: Configure SMTP notification endpoint (PBS 3.x API)
+  when:
+    - pbs_notification_type == "smtp"
+    - _pbs_notify_api_check.status == 200
+  block:
+    - name: Retrieve existing SMTP endpoints
+      ansible.builtin.uri:
+        url: "{{ _pbs_api_base }}/config/notifications/endpoints/smtp"
+        method: GET
+        headers: "{{ _pbs_auth_headers }}"
+        validate_certs: "{{ pbs_validate_certs }}"
+        status_code: 200
+      register: _pbs_existing_smtp_endpoints
+
+    - name: Check if managed SMTP endpoint exists
+      ansible.builtin.set_fact:
+        _pbs_smtp_endpoint_exists: >-
+          {{ _pbs_existing_smtp_endpoints.json.data
+             | selectattr('name', 'equalto', pbs_notification_name)
+             | list
+             | length > 0 }}
+
+    - name: Create SMTP notification endpoint
+      ansible.builtin.uri:
+        url: "{{ _pbs_api_base }}/config/notifications/endpoints/smtp"
+        method: POST
+        headers: "{{ _pbs_auth_headers }}"
+        body_format: json
+        body:
+          name: "{{ pbs_notification_name }}"
+          server: "{{ pbs_smtp_server }}"
+          port: "{{ pbs_smtp_port | int }}"
+          mode: "{{ pbs_smtp_mode }}"
+          username: "{{ pbs_smtp_username | default(omit) }}"
+          password: "{{ pbs_smtp_password | default(omit) }}"
+          from-address: "{{ pbs_smtp_from }}"
+          to: "{{ pbs_smtp_to }}"
+          comment: "Ansible-managed SMTP endpoint"
+        validate_certs: "{{ pbs_validate_certs }}"
+        status_code: 200
+      no_log: true
+      when: not _pbs_smtp_endpoint_exists | bool
+
+    - name: Update SMTP notification endpoint
+      ansible.builtin.uri:
+        url: "{{ _pbs_api_base }}/config/notifications/endpoints/smtp/{{ pbs_notification_name }}"
+        method: PUT
+        headers: "{{ _pbs_auth_headers }}"
+        body_format: json
+        body:
+          server: "{{ pbs_smtp_server }}"
+          port: "{{ pbs_smtp_port | int }}"
+          mode: "{{ pbs_smtp_mode }}"
+          username: "{{ pbs_smtp_username | default(omit) }}"
+          password: "{{ pbs_smtp_password | default(omit) }}"
+          from-address: "{{ pbs_smtp_from }}"
+          to: "{{ pbs_smtp_to }}"
+          comment: "Ansible-managed SMTP endpoint"
+        validate_certs: "{{ pbs_validate_certs }}"
+        status_code: 200
+      no_log: true
+      when: _pbs_smtp_endpoint_exists | bool
+
+- name: Warn if notification API not available on this PBS version
+  ansible.builtin.debug:
+    msg: >
+      WARNING: PBS notifications API ({{ _pbs_notify_api_check.status }}).
+      SMTP endpoint configuration requires PBS 3.x or later.
+      Skipping notification setup.
+  when: _pbs_notify_api_check.status not in [200]

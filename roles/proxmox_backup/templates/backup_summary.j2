@@ -1,0 +1,92 @@
+{# templates/backup_summary.j2 - Backup configuration summary report #}
+================================================================================
+  Proxmox Backup Configuration Summary
+  Generated: {{ ansible_date_time.iso8601 }}
+================================================================================
+
+── PBS Connection ──────────────────────────────────────────────────────────────
+  Host    : {{ pbs_host }}:{{ pbs_port }}
+  User    : {{ pbs_user }}
+  Auth    : {{ 'API Token (' ~ pbs_api_token_id ~ ')' if pbs_api_token_id else 'Password' }}
+  TLS     : {{ 'Verified' if pbs_validate_certs else 'Certificate validation DISABLED' }}
+
+── PVE Connection ──────────────────────────────────────────────────────────────
+  Host    : {{ pve_host }}:{{ pve_port }}
+  User    : {{ pve_user }}
+  Auth    : {{ 'API Token (' ~ pve_api_token_id ~ ')' if pve_api_token_id else 'Password' }}
+  Node    : {{ pve_node if pve_node else 'all nodes' }}
+  Storage : {{ pbs_pve_storage_id }}
+
+── VM Classification ───────────────────────────────────────────────────────────
+  Critical VMIDs : {{ pbs_critical_vmids | join(', ') | default('(none)') }}
+  Backup mode    : {{ pbs_critical_backup_mode }} (critical) / {{ pbs_default_backup_mode }} (standard)
+  Backup type    : {{ pbs_critical_backup_type }} (critical) / {{ pbs_standard_backup_type }} (standard)
+  Compression    : {{ pbs_compression }}
+
+── Backup Schedules ────────────────────────────────────────────────────────────
+  Critical  : {{ pbs_critical_schedule }}
+  Standard  : {{ pbs_standard_schedule }}
+
+── Retention Policies ──────────────────────────────────────────────────────────
+  CRITICAL ({{ pbs_critical_vmids | length }} VMIDs)
+    keep-last    : {{ pbs_critical_retention.keep_last }}
+    keep-hourly  : {{ pbs_critical_retention.keep_hourly }}
+    keep-daily   : {{ pbs_critical_retention.keep_daily }}
+    keep-weekly  : {{ pbs_critical_retention.keep_weekly }}
+    keep-monthly : {{ pbs_critical_retention.keep_monthly }}
+    keep-yearly  : {{ pbs_critical_retention.keep_yearly }}
+    Protected    : {{ pbs_critical_protected | bool | string | lower }}
+
+  STANDARD
+    keep-last    : {{ pbs_standard_retention.keep_last }}
+    keep-hourly  : {{ pbs_standard_retention.keep_hourly }}
+    keep-daily   : {{ pbs_standard_retention.keep_daily }}
+    keep-weekly  : {{ pbs_standard_retention.keep_weekly }}
+    keep-monthly : {{ pbs_standard_retention.keep_monthly }}
+    keep-yearly  : {{ pbs_standard_retention.keep_yearly }}
+
+── PBS Datastores ──────────────────────────────────────────────────────────────
+{% if pbs_datastores | length > 0 %}
+{% for ds in pbs_datastores %}
+  [{{ ds.name }}]
+    Path          : {{ ds.path }}
+    Comment       : {{ ds.comment | default('') }}
+    GC Schedule   : {{ ds.gc_schedule | default('daily') }}
+    Prune Schedule: {{ ds.prune_schedule | default('daily') }}
+    Verify New    : {{ ds.verify_new | default(false) | bool | string | lower }}
+{% endfor %}
+{% else %}
+  (no datastores configured)
+{% endif %}
+
+── Verification Jobs ───────────────────────────────────────────────────────────
+  Enabled         : {{ pbs_verify_jobs_enabled | bool | string | lower }}
+  Critical sched  : {{ pbs_critical_verify_schedule }}
+  Standard sched  : {{ pbs_standard_verify_schedule }}
+  Re-verify after : {{ pbs_verify_outdated_after }} days
+
+── Notifications ────────────────────────────────────────────────────────────────
+  Enabled : {{ pbs_notification_enabled | bool | string | lower }}
+{% if pbs_notification_enabled %}
+  Type    : {{ pbs_notification_type }}
+  Name    : {{ pbs_notification_name }}
+{% if pbs_notification_type == 'smtp' %}
+  Server  : {{ pbs_smtp_server }}:{{ pbs_smtp_port }} ({{ pbs_smtp_mode }})
+  From    : {{ pbs_smtp_from }}
+  To      : {{ pbs_smtp_to | join(', ') }}
+{% endif %}
+{% endif %}
+
+{% if pve_backup_jobs | length > 0 %}
+── Custom Backup Jobs ──────────────────────────────────────────────────────────
+{% for job in pve_backup_jobs %}
+  [{{ job.comment | default('job-' ~ loop.index) }}]
+    VMIDs    : {{ job.vmids | default('ALL') }}
+    Storage  : {{ job.storage | default(pbs_pve_storage_id) }}
+    Schedule : {{ job.schedule | default(pbs_standard_schedule) }}
+    Mode     : {{ job.mode | default(pbs_default_backup_mode) }}
+    Type     : {{ job.backup_type | default('full') }}
+{% endfor %}
+{% endif %}
+
+================================================================================

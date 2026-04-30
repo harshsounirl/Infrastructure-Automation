@@ -1,0 +1,135 @@
+---
+# tests/test_playbook.yml - Example and test playbook for proxmox_backup role
+#
+# Usage:
+#   ansible-playbook -i tests/inventory tests/test_playbook.yml
+#
+# For production use, store credentials in Ansible Vault:
+#   ansible-vault encrypt_string 'supersecret' --name pbs_password
+
+- name: Configure Proxmox Backup Server and backup jobs
+  hosts: localhost
+  gather_facts: true
+
+  vars:
+    # ─── PBS API connection ────────────────────────────────────────────
+    pbs_host: "192.168.1.10"
+    pbs_api_token_id: "root@pam!ansible-token"
+    pbs_api_token_secret: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # vault this
+    pbs_validate_certs: false  # set true in production with valid cert
+
+    # ─── PVE API connection ────────────────────────────────────────────
+    pve_host: "192.168.1.5"
+    pve_api_token_id: "root@pam!ansible-token"
+    pve_api_token_secret: "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"  # vault this
+    pve_validate_certs: false
+    pve_node: "pve01"
+
+    # ─── Storage ID on PVE that points to PBS ─────────────────────────
+    pbs_pve_storage_id: "pbs-main"
+
+    # ─── Critical servers ─────────────────────────────────────────────
+    pbs_critical_vmids:
+      - 100   # primary-db
+      - 101   # domain-controller
+      - 200   # prod-web-01
+
+    # ─── PBS Datastores ───────────────────────────────────────────────
+    pbs_datastores:
+      - name: "critical-store"
+        path: "/mnt/backup/critical"
+        comment: "High-priority VMs – critical production systems"
+        gc_schedule: "daily"
+        prune_schedule: "daily"
+        verify_new: true
+
+      - name: "standard-store"
+        path: "/mnt/backup/standard"
+        comment: "Standard VM backups"
+        gc_schedule: "weekly"
+        prune_schedule: "daily"
+        verify_new: false
+
+    # ─── Retention overrides ──────────────────────────────────────────
+    pbs_critical_retention:
+      keep_last: 5
+      keep_hourly: 24
+      keep_daily: 30
+      keep_weekly: 12
+      keep_monthly: 12
+      keep_yearly: 3
+
+    pbs_standard_retention:
+      keep_last: 2
+      keep_hourly: 0
+      keep_daily: 7
+      keep_weekly: 4
+      keep_monthly: 3
+      keep_yearly: 0
+
+    # ─── Schedules ────────────────────────────────────────────────────
+    pbs_critical_schedule: "0 */4 * * *"     # every 4 hours
+    pbs_standard_schedule: "0 2 * * *"       # nightly at 02:00
+
+    # ─── Backup settings ──────────────────────────────────────────────
+    pbs_critical_backup_mode: "snapshot"
+    pbs_default_backup_mode: "snapshot"
+    pbs_critical_backup_type: "full"
+    pbs_standard_backup_type: "full"
+    pbs_compression: "zstd"
+    pbs_critical_protected: true
+
+    # ─── Example: partial backup (exclude scratch disks) ──────────────
+    # pbs_standard_backup_type: "partial"
+    # pbs_partial_vmid_exclusions:
+    #   "105": ["scsi1"]   # skip scratch disk on VMID 105
+
+    # ─── Verification ─────────────────────────────────────────────────
+    pbs_verify_jobs_enabled: true
+    pbs_critical_verify_schedule: "daily"
+    pbs_standard_verify_schedule: "weekly"
+    pbs_verify_outdated_after: 14
+
+    # ─── Prune jobs ───────────────────────────────────────────────────
+    pbs_prune_jobs_enabled: true
+
+    # ─── Email notifications ──────────────────────────────────────────
+    pbs_notification_enabled: true
+    pbs_notification_type: "smtp"
+    pbs_notification_name: "ops-smtp"
+    pbs_smtp_server: "smtp.example.com"
+    pbs_smtp_port: 587
+    pbs_smtp_mode: "starttls"
+    pbs_smtp_username: "alerts@example.com"
+    pbs_smtp_password: "smtppassword"   # vault this
+    pbs_smtp_from: "pbs-alerts@example.com"
+    pbs_smtp_to:
+      - "ops-team@example.com"
+      - "on-call@example.com"
+    pbs_mail_notification: "failure"
+
+    # ─── Custom one-off backup job ────────────────────────────────────
+    pve_backup_jobs:
+      - comment: "ansible-managed:weekly-archive"
+        vmids: "100,101,200"
+        storage: "pbs-main"
+        schedule: "0 0 * * 0"      # Sundays at midnight
+        mode: "snapshot"
+        backup_type: "full"
+        compress: "zstd"
+        mail_notification: "always"
+        mailto: "ops-team@example.com"
+
+  roles:
+    - role: proxmox_backup
+
+  post_tasks:
+    - name: Write backup configuration summary
+      ansible.builtin.template:
+        src: "../templates/backup_summary.j2"
+        dest: "/tmp/proxmox_backup_summary_{{ ansible_date_time.date }}.txt"
+        mode: "0640"
+
+    - name: Display summary path
+      ansible.builtin.debug:
+        msg: "Backup summary written to /tmp/proxmox_backup_summary_{{ ansible_date_time.date }}.txt"

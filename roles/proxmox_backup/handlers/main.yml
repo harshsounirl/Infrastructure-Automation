@@ -1,0 +1,7 @@
+---
+# handlers/main.yml - Handlers for proxmox_backup role
+
+- name: Report partial backup disk exclusion applied
+  ansible.builtin.debug:
+    msg: "Disk backup exclusions applied for VMID {{ _vmid_exclusion.key }}: {{ _vmid_exclusion.value | join(', ') }}"
+  listen: "Report partial backup disk exclusion applied"

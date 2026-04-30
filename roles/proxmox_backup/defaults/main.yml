@@ -1,0 +1,168 @@
+---
+# defaults/main.yml - Default variables for proxmox_backup role
+
+# ─── Role Version ────────────────────────────────────────────────────
+proxmox_backup_role_version: "1.0.0"
+
+# ─── Feature Flags ───────────────────────────────────────────────────
+proxmox_backup_manage_pbs: true        # configure PBS datastores/prune/verify via PBS API
+proxmox_backup_manage_pve_jobs: true   # create/update backup jobs via PVE API
+
+# ─── PBS API Connection ───────────────────────────────────────────────
+# Set pbs_host when proxmox_backup_manage_pbs: true
+pbs_host: ""            # PBS hostname or IP (required if manage_pbs)
+pbs_port: 8007
+pbs_user: "root@pam"
+pbs_password: ""        # use password OR api_token (not both)
+pbs_api_token_id: ""    # e.g. "root@pam!backup-token"
+pbs_api_token_secret: ""
+pbs_validate_certs: true
+
+# ─── PVE API Connection ───────────────────────────────────────────────
+# Set pve_host when proxmox_backup_manage_pve_jobs: true
+pve_host: ""            # PVE hostname or IP (required if manage_pve_jobs)
+pve_port: 8006
+pve_user: "root@pam"
+pve_password: ""
+pve_api_token_id: ""    # e.g. "root@pam!ansible-token"
+pve_api_token_secret: ""
+pve_validate_certs: true
+pve_node: ""            # restrict to a specific node; empty = all nodes
+
+# ─── Critical Server Classification ──────────────────────────────────
+# VMIDs of servers classified as critical (get higher-frequency, longer-retention backups)
+pbs_critical_vmids: []
+# Example:
+# pbs_critical_vmids:
+#   - 100   # primary database
+#   - 101   # domain controller
+#   - 200   # production web server
+
+# ─── PBS Datastores ───────────────────────────────────────────────────
+pbs_datastores: []
+# Example:
+# pbs_datastores:
+#   - name: "critical-store"
+#     path: "/mnt/backup/critical"
+#     comment: "High-priority VM backups"
+#     gc_schedule: "daily"
+#     prune_schedule: "daily"
+#     verify_new: true
+#   - name: "standard-store"
+#     path: "/mnt/backup/standard"
+#     comment: "Standard VM backups"
+#     gc_schedule: "weekly"
+#     prune_schedule: "daily"
+#     verify_new: false
+
+# ─── Retention Policies ───────────────────────────────────────────────
+# Critical servers: more aggressive retention
+pbs_critical_retention:
+  keep_last: 5
+  keep_hourly: 24
+  keep_daily: 14
+  keep_weekly: 8
+  keep_monthly: 12
+  keep_yearly: 2
+
+# Standard servers: baseline retention
+pbs_standard_retention:
+  keep_last: 3
+  keep_hourly: 0
+  keep_daily: 7
+  keep_weekly: 4
+  keep_monthly: 3
+  keep_yearly: 0
+
+# ─── Backup Schedules ─────────────────────────────────────────────────
+# Critical: every 6 hours (systemd calendar format or cron)
+pbs_critical_schedule: "0 */6 * * *"
+# Standard: nightly at 02:00
+pbs_standard_schedule: "0 2 * * *"
+
+# ─── Backup Mode ──────────────────────────────────────────────────────
+# snapshot : live snapshot, minimal downtime (requires QEMU guest agent or virtio-fs)
+# suspend  : suspend VM during backup
+# stop     : stop VM, backup, restart (safest, most consistent)
+pbs_default_backup_mode: "snapshot"
+pbs_critical_backup_mode: "snapshot"
+
+# ─── Backup Type ──────────────────────────────────────────────────────
+# full    : back up all disks of each VM/CT (PBS deduplicates chunks automatically)
+# partial : back up VMs but skip disks marked backup=0 in VM config
+#           (disk-level exclusions must be set per-VM via pbs_partial_vmid_exclusions)
+pbs_critical_backup_type: "full"
+pbs_standard_backup_type: "full"
+
+# Per-VMID disk exclusion map for partial backups (requires per-VM API calls)
+# Format: { vmid: ["scsi1", "virtio2"] }
+pbs_partial_vmid_exclusions: {}
+# Example:
+# pbs_partial_vmid_exclusions:
+#   "105": ["scsi1"]   # exclude scratch disk from VM 105
+
+# ─── Compression ──────────────────────────────────────────────────────
+# none | lzo | gzip | zstd  (zstd recommended: best speed/ratio balance)
+pbs_compression: "zstd"
+
+# ─── Protected Backups ────────────────────────────────────────────────
+# When true, critical backups cannot be removed by prune jobs
+pbs_critical_protected: false
+
+# ─── PVE Storage ID for PBS ───────────────────────────────────────────
+# The storage ID configured on PVE that points to the PBS instance
+pbs_pve_storage_id: "pbs"
+
+# ─── Standard backup scope ────────────────────────────────────────────
+# true : standard job uses all=1 (backup ALL VMs; critical VMs get both jobs)
+# false: standard job queries PVE for all VMIDs and excludes pbs_critical_vmids
+pbs_standard_backup_all: false
+
+# ─── Auto-generate Managed Backup Jobs ────────────────────────────────
+pbs_auto_create_critical_job: true   # create job targeting pbs_critical_vmids
+pbs_auto_create_standard_job: true   # create job targeting remaining VMs
+
+# ─── Custom PVE Backup Jobs ───────────────────────────────────────────
+# Fully custom jobs appended alongside auto-generated ones
+pve_backup_jobs: []
+# Example:
+# pve_backup_jobs:
+#   - comment: "Weekly full archive"
+#     vmids: "100,101,200"
+#     storage: "pbs"
+#     schedule: "0 0 * * 0"      # Sundays at midnight
+#     mode: "snapshot"
+#     backup_type: "full"
+#     compress: "zstd"
+#     mail_notification: "always"
+#     mailto: "ops@example.com"
+
+# ─── Notifications (PBS side) ─────────────────────────────────────────
+pbs_notification_enabled: false
+pbs_notification_type: "smtp"       # smtp | gotify (webhook)
+pbs_notification_name: "ansible-smtp"
+
+# SMTP endpoint settings
+pbs_smtp_server: ""
+pbs_smtp_port: 587
+pbs_smtp_mode: "starttls"           # insecure | starttls | tls
+pbs_smtp_username: ""
+pbs_smtp_password: ""
+pbs_smtp_from: ""
+pbs_smtp_to: []                     # list of recipient addresses
+
+# ─── Verification Jobs ────────────────────────────────────────────────
+pbs_verify_jobs_enabled: true
+pbs_critical_verify_schedule: "daily"
+pbs_standard_verify_schedule: "weekly"
+pbs_verify_outdated_after: 30       # re-verify snapshots older than N days
+
+# ─── Prune Jobs ───────────────────────────────────────────────────────
+pbs_prune_jobs_enabled: true
+pbs_critical_prune_schedule: "daily"
+pbs_standard_prune_schedule: "daily"
+
+# ─── Notes & Notification (PVE job side) ──────────────────────────────
+pbs_backup_notes_template: "{{guestname}} - {{node}} - ansible-managed"
+pbs_mail_notification: "failure"    # always | failure | never
+pbs_mailto: ""                      # fallback email for PVE backup notifications

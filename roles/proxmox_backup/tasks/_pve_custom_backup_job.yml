@@ -1,0 +1,62 @@
+---
+# tasks/_pve_custom_backup_job.yml - Helper: create/update one custom PVE backup job
+# Called by pve_backup_jobs.yml with _custom_job loop var
+
+- name: "Resolve custom job comment identifier"
+  ansible.builtin.set_fact:
+    _custom_job_comment: "{{ _custom_job.comment | default('ansible-managed:custom:' + ansible_loop.index | string) }}"
+
+- name: "Find existing custom backup job: {{ _custom_job_comment }}"
+  ansible.builtin.set_fact:
+    _existing_custom_job: >-
+      {{ _pve_existing_backup_jobs.json.data
+         | selectattr('comment', 'defined')
+         | selectattr('comment', 'equalto', _custom_job_comment)
+         | list
+         | first | default({}) }}
+
+- name: "Resolve prune string for custom job: {{ _custom_job_comment }}"
+  ansible.builtin.set_fact:
+    _custom_prune_str: >-
+      {{ (_custom_job.backup_type | default('full') == 'full')
+         | ternary(_pbs_critical_prune_str, _pbs_standard_prune_str) }}
+
+- name: "Build custom backup job body: {{ _custom_job_comment }}"
+  ansible.builtin.set_fact:
+    _custom_job_body:
+      vmid: "{{ _custom_job.vmids | default(omit) }}"
+      all: "{{ 1 if (_custom_job.vmids is not defined) else omit }}"
+      storage: "{{ _custom_job.storage | default(pbs_pve_storage_id) }}"
+      schedule: "{{ _custom_job.schedule | default(pbs_standard_schedule) }}"
+      mode: "{{ _custom_job.mode | default(pbs_default_backup_mode) }}"
+      compress: "{{ _custom_job.compress | default(pbs_compression) }}"
+      prune-backups: "{{ _custom_job.prune_backups | default(_custom_prune_str) }}"
+      notes-template: "{{ _custom_job.notes_template | default(pbs_backup_notes_template) }}"
+      comment: "{{ _custom_job_comment }}"
+      enabled: "{{ 1 if _custom_job.enabled | default(true) | bool else 0 }}"
+      mailnotification: "{{ _custom_job.mail_notification | default(pbs_mail_notification) }}"
+      mailto: "{{ _custom_job.mailto | default(pbs_mailto) | default(omit) }}"
+
+- name: "Create custom backup job: {{ _custom_job_comment }}"
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/cluster/backup"
+    method: POST
+    headers: "{{ _pve_auth_headers }}"
+    body_format: json
+    body: "{{ _custom_job_body }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  when: _existing_custom_job | length == 0
+
+- name: "Update custom backup job: {{ _custom_job_comment }}"
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/cluster/backup/{{ _existing_custom_job.id }}"
+    method: PUT
+    headers: "{{ _pve_auth_headers }}"
+    body_format: json
+    body: "{{ _custom_job_body }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  when:
+    - _existing_custom_job | length > 0
+    - _existing_custom_job.id is defined

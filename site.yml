@@ -1,5 +1,5 @@
 ---
-# site.yml - Example playbook for Windows hardening
+# site.yml - Top-level playbook combining all infrastructure roles
 
 - name: Apply Windows Hardening
   hosts: windows
@@ -13,3 +13,26 @@
 
   roles:
     - role: windows_hardening
+
+- name: Configure Proxmox Backup Server
+  hosts: localhost
+  gather_facts: true
+
+  vars:
+    # ─── PBS API ────────────────────────────────────────────────────
+    pbs_host: "{{ pbs_host | mandatory }}"
+    pbs_api_token_id: "{{ pbs_api_token_id | default('') }}"
+    pbs_api_token_secret: "{{ pbs_api_token_secret | default('') }}"
+    pbs_password: "{{ pbs_password | default('') }}"
+
+    # ─── PVE API ────────────────────────────────────────────────────
+    pve_host: "{{ pve_host | mandatory }}"
+    pve_api_token_id: "{{ pve_api_token_id | default('') }}"
+    pve_api_token_secret: "{{ pve_api_token_secret | default('') }}"
+    pve_password: "{{ pve_password | default('') }}"
+
+    # See roles/proxmox_backup/defaults/main.yml for all available options
+    # Override via -e or group_vars/host_vars
+
+  roles:
+    - role: proxmox_backup

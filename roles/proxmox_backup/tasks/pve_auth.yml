@@ -1,0 +1,49 @@
+---
+# tasks/pve_auth.yml - Authenticate to the Proxmox VE API
+#
+# Supports two auth methods:
+#   1. API token  : Authorization: PVEAPIToken=<user>@<realm>!<tokenid>=<secret>
+#   2. Password   : POST /access/ticket -> PVEAuthCookie + CSRFPreventionToken
+
+- name: Set PVE auth headers using API token
+  ansible.builtin.set_fact:
+    _pve_auth_headers:
+      Authorization: "PVEAPIToken={{ pve_api_token_id }}={{ pve_api_token_secret }}"
+  no_log: true
+  when: pve_api_token_id | length > 0
+
+- name: Obtain PVE ticket via password authentication
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/access/ticket"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      username: "{{ pve_user }}"
+      password: "{{ pve_password }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  register: _pve_ticket_response
+  no_log: true
+  when: pve_api_token_id | length == 0
+
+- name: Set PVE auth headers from ticket
+  ansible.builtin.set_fact:
+    _pve_auth_headers:
+      Cookie: "PVEAuthCookie={{ _pve_ticket_response.json.data.ticket }}"
+      CSRFPreventionToken: "{{ _pve_ticket_response.json.data.CSRFPreventionToken }}"
+  no_log: true
+  when: pve_api_token_id | length == 0
+
+- name: Verify PVE API connectivity
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/version"
+    method: GET
+    headers: "{{ _pve_auth_headers }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  register: _pve_version
+  failed_when: _pve_version.status != 200
+
+- name: Display PVE version
+  ansible.builtin.debug:
+    msg: "Connected to PVE {{ _pve_version.json.data.version }} (release {{ _pve_version.json.data.release }})"

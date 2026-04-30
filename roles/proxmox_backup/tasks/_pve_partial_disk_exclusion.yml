@@ -1,0 +1,48 @@
+---
+# tasks/_pve_partial_disk_exclusion.yml - Mark specific VM disks as backup=0
+# Called by pve_backup_jobs.yml with _vmid_exclusion loop var
+# _vmid_exclusion: { key: "105", value: ["scsi1", "virtio2"] }
+#
+# This enables partial backups by preventing vzdump from including
+# the specified disks in any backup job.
+
+- name: "Query VM {{ _vmid_exclusion.key }} configuration"
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/nodes/{{ pve_node | default('localhost') }}/qemu/{{ _vmid_exclusion.key }}/config"
+    method: GET
+    headers: "{{ _pve_auth_headers }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: [200, 404]
+  register: _vm_config
+  ignore_errors: true
+
+- name: "Query CT {{ _vmid_exclusion.key }} configuration (fallback if not QEMU)"
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/nodes/{{ pve_node | default('localhost') }}/lxc/{{ _vmid_exclusion.key }}/config"
+    method: GET
+    headers: "{{ _pve_auth_headers }}"
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: [200, 404]
+  register: _ct_config
+  when: _vm_config.status == 404
+  ignore_errors: true
+
+- name: "Apply disk exclusions to VM {{ _vmid_exclusion.key }}"
+  ansible.builtin.uri:
+    url: "{{ _pve_api_base }}/nodes/{{ pve_node | default('localhost') }}/qemu/{{ _vmid_exclusion.key }}/config"
+    method: PUT
+    headers: "{{ _pve_auth_headers }}"
+    body_format: json
+    body: >-
+      {{ dict(_vmid_exclusion.value
+              | map('regex_replace', '$', ':backup=0')
+              | zip(_vmid_exclusion.value
+                    | map('extract', _vm_config.json.data | default({}))
+                    | map('regex_replace', '(?:,backup=\\d)?$', ',backup=0'))
+              | list) }}
+    validate_certs: "{{ pve_validate_certs }}"
+    status_code: 200
+  when:
+    - _vm_config.status == 200
+    - _vmid_exclusion.value | length > 0
+  notify: Report partial backup disk exclusion applied
